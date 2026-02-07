@@ -1,0 +1,26 @@
+[
+    {
+        "source": {
+            "name": "Demo Source"
+        },
+        "author": "Alice Smith",
+        "title": "Global Summit Addresses Climate Change",
+        "description": "World leaders gather to discuss urgent climate action.",
+        "url": "https://example.com/climate-change-summit",
+        "urlToImage": "https://example.com/images/summit.jpg",
+        "publishedAt": "2023-10-27T10:00:00Z",
+        "content": "Full content of the article would go here..."
+    },
+    {
+        "source": {
+            "name": "Tech Daily"
+        },
+        "author": "Bob Jones",
+        "title": "New AI Chip Unveiled",
+        "description": "Tech giant reveals somewhat faster processor.",
+        "url": "https://example.com/new-ai-chip",
+        "urlToImage": "https://example.com/images/chip.jpg",
+        "publishedAt": "2023-10-26T14:30:00Z",
+        "content": "Details about the new architecture..."
+    }
+]
