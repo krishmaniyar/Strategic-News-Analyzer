@@ -7,7 +7,7 @@ def get_article(db: Session, article_id: int):
 def get_article_by_hash(db: Session, hash_id: str):
     return db.query(models.NewsArticle).filter(models.NewsArticle.hash_id == hash_id).first()
 
-def get_articles(db: Session, skip: int = 0, limit: int = 100):
+def get_articles(db: Session, skip: int = 0, limit: int = 1000):
     return db.query(models.NewsArticle).order_by(models.NewsArticle.published_at.desc()).offset(skip).limit(limit).all()
 
 def create_article(db: Session, article: schemas.NewsArticleCreate):

@@ -3,10 +3,21 @@ from sqlalchemy.orm import Session
 from typing import List
 from .. import crud, schemas, database
 
+from ..services.aggregator import Aggregator
+
 router = APIRouter()
 
+@router.post("/news/fetch")
+def fetch_news(db: Session = Depends(database.get_db)):
+    """
+    Trigger fetching of new articles from external sources.
+    """
+    aggregator = Aggregator(db)
+    stats = aggregator.run_ingestion()
+    return {"message": "News fetching complete", "stats": stats}
+
 @router.get("/news", response_model=List[schemas.NewsArticle])
-def read_news(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
+def read_news(skip: int = 0, limit: int = 1000, db: Session = Depends(database.get_db)):
     """
     Get latest news articles.
     """

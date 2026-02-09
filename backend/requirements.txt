@@ -6,3 +6,7 @@ python-dotenv
 pydantic
 pydantic-settings
 beautifulsoup4
+transformers
+torch
+sentencepiece
+langdetect

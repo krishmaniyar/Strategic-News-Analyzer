@@ -1,11 +1,14 @@
 import requests
 import json
 import os
+import logging
 from typing import List, Dict, Any
 from datetime import datetime
 from ..config import get_settings
 
 settings = get_settings()
+
+logger = logging.getLogger("news_fetcher")
 
 class NewsFetcher:
     def __init__(self):
@@ -19,31 +22,43 @@ class NewsFetcher:
         Orchestrates fetching from all configured sources.
         """
         if self.demo_mode:
-            print("DEMO MODE: Loading from local file")
+            logger.info("DEMO MODE: Loading from local file")
             return self.fetch_from_local()
 
         articles = []
-        # Error handling is basic here; in production, we'd want more granular logging per source.
+        
+        # NewsAPI
         try:
-            articles.extend(self.fetch_from_newsapi())
+            logger.info("Starting fetch from NewsAPI...")
+            fetched = self.fetch_from_newsapi()
+            logger.info(f"[NewsAPI] Successfully fetched {len(fetched)} articles.")
+            articles.extend(fetched)
         except Exception as e:
-            print(f"Error fetching from NewsAPI: {e}")
+            logger.error(f"[NewsAPI] Error fetching: {e}")
 
-        # Add other sources here similarly...
-        # try:
-        #     articles.extend(self.fetch_from_gnews())
-        # except Exception as e: ...
+        # GNews
+        try:
+            logger.info("Starting fetch from GNews (Multi-language)...")
+            fetched = self.fetch_from_gnews()
+            logger.info(f"[GNews] Successfully fetched {len(fetched)} articles.")
+            articles.extend(fetched)
+        except Exception as e:
+            logger.error(f"[GNews] Error fetching: {e}")
 
+        # MediaStack
+        try:
+            logger.info("Starting fetch from MediaStack...")
+            fetched = self.fetch_from_mediastack()
+            logger.info(f"[MediaStack] Successfully fetched {len(fetched)} articles.")
+            articles.extend(fetched)
+        except Exception as e:
+            logger.error(f"[MediaStack] Error fetching: {e}")
+
+        logger.info(f"Total articles fetched from all sources: {len(articles)}")
         return articles
 
     def fetch_from_local(self) -> List[Dict[str, Any]]:
-        """
-        Loads sample data for demo purposes.
-        """
-        # Assuming news_sample.json is in the backend root
-        # In a real app, use pathlib to find the file relative to this file
         try:
-            # Go up two levels from app/services/news_fetcher.py -> backend/
             base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             file_path = os.path.join(base_path, "news_sample.json")
             
@@ -54,53 +69,139 @@ class NewsFetcher:
             for item in data:
                 normalized.append({
                     "title": item.get("title"),
-                    "content": item.get("description") or item.get("content"), # Fallback
+                    "content": item.get("content") or item.get("description"),
                     "source": item.get("source", {}).get("name", "Unknown"),
                     "url": item.get("url"),
                     "published_at": self._parse_date(item.get("publishedAt")),
-                    "language": "en", # Assumption for demo
+                    "language": "en",
                     "raw_json": json.dumps(item)
                 })
             return normalized
-        except FileNotFoundError:
-            print("news_sample.json not found.")
+        except Exception as e:
+            logger.error(f"Error reading local file: {e}")
             return []
 
     def fetch_from_newsapi(self) -> List[Dict[str, Any]]:
         if not self.newsapi_key:
-            print("NewsAPI key not set, skipping.")
+            logger.warning("NewsAPI key not set, skipping.")
             return []
 
-        url = "https://newsapi.org/v2/top-headlines"
+        normalized = []
+        countries = ['us', 'in']
+        
+        for country in countries:
+            try:
+                url = "https://newsapi.org/v2/top-headlines"
+                params = {
+                    "country": country,
+                    "apiKey": self.newsapi_key,
+                }
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                for item in data.get("articles", []):
+                    title = item.get("title")
+                    source_name = item.get("source", {}).get("name", "NewsAPI")
+                    logger.info(f"[NewsAPI:{country}] Found article: {title[:50]}... (Source: {source_name})")
+                    
+                    normalized.append({
+                        "title": title,
+                        "content": item.get("content") or item.get("description"),
+                        "source": source_name,
+                        "url": item.get("url"),
+                        "published_at": self._parse_date(item.get("publishedAt")),
+                        "language": "en", # NewsAPI usually returns English for 'in' too, but could vary. 
+                        # We'll rely on our pipeline detection for accuracy.
+                        "raw_json": json.dumps(item)
+                    })
+            except Exception as e:
+                logger.error(f"[NewsAPI:{country}] Error fetching: {e}")
+                continue
+
+        return normalized
+
+    def fetch_from_gnews(self) -> List[Dict[str, Any]]:
+        if not self.gnews_key:
+            logger.warning("GNews key not set, skipping.")
+            return []
+
+        languages = ['en', 'hi', 'fr', 'de', 'es', 'zh', 'ru', 'ar']
+        normalized = []
+        url = "https://gnews.io/api/v4/search"
+
+        for lang in languages:
+            try:
+                logger.info(f"[GNews] Fetching for language: {lang}")
+                params = {
+                    "token": self.gnews_key,
+                    "lang": lang,
+                    "q": "news", # Required for search endpoint
+                    "max": 10,  # As requested in the format
+                    "sortby": "publishedAt"
+                }
+                response = requests.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                articles_found = data.get("articles", [])
+                logger.info(f"[GNews:{lang}] Found {len(articles_found)} articles.")
+                
+                for item in articles_found:
+                    title = item.get("title")
+                    logger.info(f"[GNews:{lang}] Article: {title[:50]}...")
+                    
+                    normalized.append({
+                        "title": title,
+                        "content": item.get("content") or item.get("description"),
+                        "source": item.get("source", {}).get("name", "GNews"),
+                        "url": item.get("url"),
+                        "published_at": self._parse_date(item.get("publishedAt")),
+                        "language": lang,
+                        "raw_json": json.dumps(item)
+                    })
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 403:
+                    logger.warning(f"[GNews:{lang}] 403 Forbidden: Check API Key validity or Plan Quota.")
+                else:
+                    logger.error(f"[GNews:{lang}] HTTP error: {e}")
+                continue
+            except Exception as e:
+                 logger.error(f"[GNews:{lang}] Error fetching: {e}")
+                 continue
+
+        return normalized
+
+    def fetch_from_mediastack(self) -> List[Dict[str, Any]]:
+        if not self.mediastack_key:
+            logger.warning("MediaStack key not set, skipping.")
+            return []
+
+        url = "http://api.mediastack.com/v1/news"
         params = {
-            "country": "us",
-            "apiKey": self.newsapi_key
+            "access_key": self.mediastack_key,
+            "languages": "en,hi", # Added hi
+            "countries": "us,in",
         }
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        
+
         normalized = []
-        for item in data.get("articles", []):
+        for item in data.get("data", []):
+            title = item.get("title")
+            logger.info(f"[MediaStack] Found article: {title[:50]}...")
+            
             normalized.append({
-                "title": item.get("title"),
-                "content": item.get("description"), # NewsAPI often puts summary in description
-                "source": item.get("source", {}).get("name"),
+                "title": title,
+                "content": item.get("content") or item.get("description"),
+                "source": item.get("source", "MediaStack"),
                 "url": item.get("url"),
-                "published_at": self._parse_date(item.get("publishedAt")),
-                "language": "en", # Default for US headlines
+                "published_at": self._parse_date(item.get("published_at")),
+                "language": item.get("language", "en"),
                 "raw_json": json.dumps(item)
             })
         return normalized
-
-    # Placeholders for other APIs
-    def fetch_from_gnews(self):
-        # Implementation would be similar
-        return []
-
-    def fetch_from_mediastack(self):
-        # Implementation would be similar
-        return []
 
     def _parse_date(self, date_str: str) -> datetime:
         if not date_str:
