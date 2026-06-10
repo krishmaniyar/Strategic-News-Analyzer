@@ -94,5 +94,40 @@ class GroqClient:
 
         return {}
 
+    async def stream_chat(
+        self,
+        model: str,
+        system: str,
+        user: str,
+        max_tokens: int = 1000
+    ):
+        """Stream Groq API response chunk by chunk."""
+        if not settings.groq_api_key:
+            yield ""
+            return
+
+        if not await self._check_budget(max_tokens):
+            yield ""
+            return
+
+        try:
+            stream = await self._client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.1,
+                stream=True
+            )
+            
+            async for chunk in stream:
+                if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            logger.error("groq_stream_failed", error=str(e))
+            yield ""
+
 # Singleton instance — reused across all agents
 groq_client = GroqClient()

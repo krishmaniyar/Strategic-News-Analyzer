@@ -98,6 +98,21 @@ class IngestionCoordinator:
                                         str(article.id)
                                     )
 
+                        # Broadcast via WebSocket
+                        try:
+                            from app.api.feed import manager
+                            article_data = {
+                                "id": str(article.id),
+                                "title": article.title,
+                                "url": article.url,
+                                "source_name": article.source.name if article.source else "Unknown",
+                                "published_at": str(article.published_at),
+                                "risk_level": "Medium" # Placeholder, get from analysis
+                            }
+                            await manager.broadcast_article(article_data)
+                        except Exception as ws_err:
+                            logger.error("ws_broadcast_failed", error=str(ws_err))
+
                         logger.info("ai_pipeline_processing_success", article_id=article.id)
                     except Exception as ai_err:
                         logger.error("ai_pipeline_processing_failed", article_id=article.id, error=str(ai_err))
