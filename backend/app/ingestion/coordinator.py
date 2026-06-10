@@ -70,10 +70,34 @@ class IngestionCoordinator:
                     try:
                         from app.agents.analysis_agent import analyze_article
                         from app.agents.embedding_agent import embed_article
+                        from app.agents.entity_agent import extract_entities
+                        from app.db.repositories.entity_repo import upsert_entity, upsert_relation
                         
                         logger.info("ai_pipeline_processing_start", article_id=article.id)
                         await analyze_article(article, self.repo)
                         await embed_article(article, self.repo)
+                        
+                        # Phase 3: Entity extraction and KG upsert
+                        entity_result = await extract_entities(str(article.id), article.content_raw)
+                        if entity_result and entity_result.get("entities"):
+                            entity_id_map = {}
+                            for ent in entity_result["entities"]:
+                                ent_id = await upsert_entity(self.db, ent["name"], ent["type"], ent.get("description"))
+                                entity_id_map[ent["name"]] = ent_id
+                            
+                            for rel in entity_result.get("relations", []):
+                                from_name = rel.get("from")
+                                to_name = rel.get("to")
+                                if from_name in entity_id_map and to_name in entity_id_map:
+                                    await upsert_relation(
+                                        self.db, 
+                                        entity_id_map[from_name], 
+                                        entity_id_map[to_name], 
+                                        rel.get("relation"), 
+                                        rel.get("confidence", 0.5), 
+                                        str(article.id)
+                                    )
+
                         logger.info("ai_pipeline_processing_success", article_id=article.id)
                     except Exception as ai_err:
                         logger.error("ai_pipeline_processing_failed", article_id=article.id, error=str(ai_err))

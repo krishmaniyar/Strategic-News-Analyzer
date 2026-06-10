@@ -99,3 +99,78 @@ class ArticleEmbedding(Base):
 
     # Relationships
     article = relationship("Article", backref="embeddings")
+
+class Entity(Base):
+    __tablename__ = "entities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    global_risk_score = Column(Float, default=0.0)
+    mention_count = Column(Integer, default=1)
+    first_seen = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_seen = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+class EntityRelation(Base):
+    __tablename__ = "entity_relations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    from_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="CASCADE"), nullable=False)
+    to_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id", ondelete="CASCADE"), nullable=False)
+    relation_type = Column(String, nullable=False)
+    confidence = Column(Float, default=0.5)
+    evidence_count = Column(Integer, default=1)
+    source_article_ids = Column(JSONB, default=list)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="ongoing")
+    risk_level = Column(String, default="Low")
+    involved_entity_ids = Column(JSONB, default=list)
+    affected_regions = Column(JSONB, default=list)
+    centroid = Column(PGVector, nullable=True)
+    started_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_updated = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+class EventArticle(Base):
+    __tablename__ = "event_articles"
+
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), primary_key=True)
+    article_id = Column(UUID(as_uuid=True), ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True)
+    relevance_score = Column(Float, nullable=True)
+    linked_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+class Forecast(Base):
+    __tablename__ = "forecasts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True)
+    topic = Column(String, nullable=False)
+    prediction = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=False)
+    timeframe = Column(String, nullable=True)
+    risk_level = Column(String, nullable=True)
+    key_scenarios = Column(JSONB, default=list)
+    key_risks = Column(JSONB, default=list)
+    evidence_summary = Column(Text, nullable=True)
+    chain_of_thought = Column(Text, nullable=True)
+    outcome_occurred = Column(Boolean, nullable=True)
+    brier_score = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+class ForecastEvidence(Base):
+    __tablename__ = "forecast_evidence"
+
+    forecast_id = Column(UUID(as_uuid=True), ForeignKey("forecasts.id", ondelete="CASCADE"), primary_key=True)
+    article_id = Column(UUID(as_uuid=True), ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True)
+    relevance_note = Column(Text, nullable=True)
