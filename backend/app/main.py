@@ -1,8 +1,38 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
+
+logger = get_logger(__name__)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    logger.info("app_starting", environment=settings.environment)
+    yield
+    logger.info("app_shutdown")
+
+app = FastAPI(
+    title="Strategic News Analyzer API",
+    description="Geopolitical Intelligence Platform — AI-powered analysis engine",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+# CORS — allow the Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://*.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Prometheus metrics at GET /metrics
+Instrumentator().instrument(app).expose(app)
+
 from app.api import auth, articles, admin, entities, events, analyst, forecasts, feed
 
 # Include API routers (versioned v2)
@@ -15,6 +45,6 @@ app.include_router(analyst.router)
 app.include_router(forecasts.router)
 app.include_router(feed.router)
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health_check():
-    return {"status": "healthy", "service": "geopolitical-intelligence-api"}
+    return {"status": "healthy", "service": "geopolitical-intelligence-api", "version": "2.0.0"}
