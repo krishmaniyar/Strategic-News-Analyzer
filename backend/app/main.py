@@ -1,53 +1,44 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .database import engine, Base
-from .api import routes_news, routes_admin, routes_ai
-from .ai import load_all_models
-from .utils.logger import setup_logging
-import threading
-import logging
+from app.core.config import settings
+from app.core.logging import setup_logging, get_logger
+from app.api import auth, articles, admin
 
-# Setup logging immediately
+logger = get_logger(__name__)
+
+# Initialize structured logging configuration
 setup_logging()
-logger = logging.getLogger(__name__)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup tasks
+    logger.info("application_startup", environment=settings.environment)
+    yield
+    # Shutdown tasks
+    logger.info("application_shutdown")
 
 app = FastAPI(
-    title="Geopolitical News Aggregator Backend",
-    description="API for fetching and aggregating geopolitical news.",
-    version="1.0.0"
+    title="Geopolitical Intelligence Platform API",
+    version="2.0.0",
+    description="AI-Powered Geopolitical News Analysis and Forecasting System",
+    lifespan=lifespan
 )
 
-# Load AI models on startup in a separate thread to not block server start? 
-# Or just block to ensure they are ready? 
-# The user said "Load models once at startup".
-# Let's use a startup event.
-@app.on_event("startup")
-def startup_event():
-    # Load models in a separate thread so it doesn't timeout the worker if it takes too long
-    # But usually for dev server valid to just load.
-    # Let's just call it.
-    print("Loading AI models...")
-    load_all_models()
-    print("AI models loaded.")
-
-# CORS
+# Set up CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    # allow_origins=origins, # Removed in favor of regex
-    allow_origin_regex=r"https?://localhost:\d+",
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(routes_news.router, prefix="/api/v1", tags=["news"])
-app.include_router(routes_admin.router, prefix="/admin", tags=["admin"])
-app.include_router(routes_ai.router, prefix="/api/v1/ai", tags=["ai"])
+# Include API routers (versioned v2)
+app.include_router(auth.router, prefix="/api/v2/auth", tags=["Authentication"])
+app.include_router(articles.router, prefix="/api/v2/articles", tags=["Articles"])
+app.include_router(admin.router, prefix="/api/v2/admin", tags=["Administration"])
 
-@app.get("/")
-def root():
-    return {"message": "Welcome to the Geopolitical News Aggregator API"}
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "geopolitical-intelligence-api"}
