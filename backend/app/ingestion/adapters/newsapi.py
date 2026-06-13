@@ -1,6 +1,6 @@
 import httpx
 from typing import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime
 from app.ingestion.base import BaseSourceAdapter, RawArticle
 from app.core.logging import get_logger
 
@@ -25,7 +25,7 @@ class NewsAPIAdapter(BaseSourceAdapter):
             "q": self.GEOPOLITICS_QUERY,
             "language": "en",
             "sortBy": "publishedAt",
-            "pageSize": 10,
+            "pageSize": 100,
             "apiKey": self.api_key
         }
 
@@ -61,6 +61,6 @@ class NewsAPIAdapter(BaseSourceAdapter):
                 author=item.get("author"),
                 image_url=item.get("urlToImage")
             )
-            
+
             if self._is_valid(article):
                 yield article

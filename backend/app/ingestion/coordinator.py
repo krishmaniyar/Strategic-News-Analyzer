@@ -18,7 +18,7 @@ class IngestionCoordinator:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = ArticleRepository(db)
-        
+
         # Instantiate adapters with config keys
         self.adapters = [
             NewsAPIAdapter(api_key=settings.newsapi_key),
@@ -32,27 +32,27 @@ class IngestionCoordinator:
         """Fetch, deduplicate, and ingest articles from a single adapter."""
         source_id = adapter.source_id()
         logger.info("ingestion_start_source", source=source_id)
-        
+
         stats = {
             "fetched": 0,
             "inserted": 0,
             "duplicates": 0,
             "errors": 0
         }
-        
+
         try:
             async for raw_art in adapter.fetch():
                 stats["fetched"] += 1
-                
+
                 # Compute exact duplicate hash ID
                 hash_id = compute_hash(raw_art.title, raw_art.url)
-                
+
                 # Check DB for duplicate
                 is_dup = await self.repo.exists_by_hash(hash_id)
                 if is_dup:
                     stats["duplicates"] += 1
                     continue
-                
+
                 # Insert article
                 article = await self.repo.create_article(
                     title=raw_art.title,
@@ -63,7 +63,7 @@ class IngestionCoordinator:
                     published_at=raw_art.published_at,
                     language=raw_art.language
                 )
-                
+
                 if article:
                     stats["inserted"] += 1
                     # Trigger AI Core processing pipeline in-line
@@ -72,11 +72,11 @@ class IngestionCoordinator:
                         from app.agents.embedding_agent import embed_article
                         from app.agents.entity_agent import extract_entities
                         from app.db.repositories.entity_repo import upsert_entity, upsert_relation
-                        
+
                         logger.info("ai_pipeline_processing_start", article_id=article.id)
-                        await analyze_article(article, self.repo)
+                        analysis_res = await analyze_article(article, self.repo)
                         await embed_article(article, self.repo)
-                        
+
                         # Phase 3: Entity extraction and KG upsert
                         entity_result = await extract_entities(str(article.id), article.content_raw)
                         if entity_result and entity_result.get("entities"):
@@ -84,17 +84,17 @@ class IngestionCoordinator:
                             for ent in entity_result["entities"]:
                                 ent_id = await upsert_entity(self.db, ent["name"], ent["type"], ent.get("description"))
                                 entity_id_map[ent["name"]] = ent_id
-                            
+
                             for rel in entity_result.get("relations", []):
                                 from_name = rel.get("from")
                                 to_name = rel.get("to")
                                 if from_name in entity_id_map and to_name in entity_id_map:
                                     await upsert_relation(
-                                        self.db, 
-                                        entity_id_map[from_name], 
-                                        entity_id_map[to_name], 
-                                        rel.get("relation"), 
-                                        rel.get("confidence", 0.5), 
+                                        self.db,
+                                        entity_id_map[from_name],
+                                        entity_id_map[to_name],
+                                        rel.get("relation"),
+                                        rel.get("confidence", 0.5),
                                         str(article.id)
                                     )
 
@@ -105,9 +105,9 @@ class IngestionCoordinator:
                                 "id": str(article.id),
                                 "title": article.title,
                                 "url": article.url,
-                                "source_name": article.source.name if article.source else "Unknown",
+                                "source_name": raw_art.source_name,
                                 "published_at": str(article.published_at),
-                                "risk_level": "Medium" # Placeholder, get from analysis
+                                "risk_level": (analysis_res or {}).get("risk_level", "Medium")
                             }
                             await manager.broadcast_article(article_data)
                         except Exception as ws_err:
@@ -116,13 +116,20 @@ class IngestionCoordinator:
                         logger.info("ai_pipeline_processing_success", article_id=article.id)
                     except Exception as ai_err:
                         logger.error("ai_pipeline_processing_failed", article_id=article.id, error=str(ai_err))
+
+                    # Commit this article and its analysis/embeddings/entities immediately
+                    try:
+                        await self.db.commit()
+                    except Exception as commit_err:
+                        await self.db.rollback()
+                        logger.error("article_commit_failed", article_id=article.id, error=str(commit_err))
                 else:
                     stats["errors"] += 1
-                    
+
         except Exception as e:
             logger.error("ingestion_failed_source", source=source_id, error=str(e))
             stats["errors"] += 1
-            
+
         logger.info("ingestion_complete_source", source=source_id, stats=stats)
         return stats
 
@@ -130,7 +137,7 @@ class IngestionCoordinator:
         """Run ingestion pipeline across all configured adapters."""
         logger.info("ingestion_pipeline_run_start")
         start_time = datetime.utcnow()
-        
+
         overall_stats = {
             "sources": {},
             "total_fetched": 0,
@@ -139,20 +146,20 @@ class IngestionCoordinator:
             "total_errors": 0,
             "duration_seconds": 0.0
         }
-        
+
         for adapter in self.adapters:
             source_id = adapter.source_id()
             stats = await self.ingest_source(adapter)
-            
+
             # Record individual source stats
             overall_stats["sources"][source_id] = stats
-            
+
             # Aggregate stats
             overall_stats["total_fetched"] += stats["fetched"]
             overall_stats["total_inserted"] += stats["inserted"]
             overall_stats["total_duplicates"] += stats["duplicates"]
             overall_stats["total_errors"] += stats["errors"]
-            
+
         # Commit all transactions
         try:
             await self.db.commit()
@@ -161,9 +168,9 @@ class IngestionCoordinator:
             await self.db.rollback()
             logger.error("ingestion_pipeline_db_commit_failed", error=str(e))
             overall_stats["total_errors"] += len(self.adapters)
-            
+
         duration = (datetime.utcnow() - start_time).total_seconds()
         overall_stats["duration_seconds"] = duration
-        
+
         logger.info("ingestion_pipeline_run_complete", stats=overall_stats)
         return overall_stats

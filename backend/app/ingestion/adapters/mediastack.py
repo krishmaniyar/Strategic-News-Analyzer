@@ -21,7 +21,7 @@ class MediaStackAdapter(BaseSourceAdapter):
             "access_key": self.api_key,
             "keywords": "diplomacy",
             "languages": "en",
-            "limit": 10
+            "limit": 100
         }
 
         try:
@@ -55,6 +55,6 @@ class MediaStackAdapter(BaseSourceAdapter):
                 author=item.get("author"),
                 image_url=item.get("image")
             )
-            
+
             if self._is_valid(article):
                 yield article

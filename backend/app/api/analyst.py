@@ -1,4 +1,6 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -18,9 +20,6 @@ async def process_query(request: QueryRequest, db: AsyncSession = Depends(get_db
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from fastapi.responses import StreamingResponse
-import json
-
 @router.post("/query_stream")
 async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends(get_db)):
     """SSE Streaming RAG-powered query answering for analysts."""
@@ -28,21 +27,21 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
     from app.ai.ollama_client import ollama_client
     from app.rag.query_engine import RAG_SYSTEM_PROMPT
     from app.ai.groq_client import groq_client
-    
+
     async def generate():
         try:
             q_embedding = await ollama_client.embed(request.question)
             chunks = await hybrid_retrieve(db, request.question, q_embedding, top_k=5)
-            
+
             sources = [{"id": str(c['article_id']), "title": c['title'], "url": c['url']} for c in chunks]
-            
+
             context = "\n\n---\n\n".join([
                 f"[Source {i+1}] {c['title']} ({c['published_at'].date() if c['published_at'] else 'Unknown date'}, {c['source_name']})\n{c['chunk_text']}"
                 for i, c in enumerate(chunks)
             ])
-            
+
             prompt = f"Context:\n{context}\n\nQuestion: {request.question}"
-            
+
             async for chunk in groq_client.stream_chat(
                 model="llama-3.3-70b-versatile",
                 system=RAG_SYSTEM_PROMPT,
@@ -50,7 +49,7 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
                 max_tokens=1000
             ):
                 yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-                
+
             yield f"data: {json.dumps({'type': 'done', 'sources': sources})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"

@@ -40,7 +40,7 @@ class RSSAdapter(BaseSourceAdapter):
                         logger.warning("rss_invalid_format", source=source_name)
                         continue
 
-                    items = channel.findall("item")[:10]
+                    items = channel.findall("item")
                     logger.info("rss_fetched_items", source=source_name, count=len(items))
 
                     for item in items:

@@ -21,7 +21,7 @@ class GNewsAdapter(BaseSourceAdapter):
         params = {
             "q": self.GEOPOLITICS_QUERY,
             "lang": "en",
-            "max": 10,
+            "max": 100,
             "apikey": self.api_key
         }
 
@@ -55,6 +55,6 @@ class GNewsAdapter(BaseSourceAdapter):
                 language="en",
                 image_url=item.get("image")
             )
-            
+
             if self._is_valid(article):
                 yield article

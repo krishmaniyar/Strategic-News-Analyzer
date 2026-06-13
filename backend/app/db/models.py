@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, String, Boolean, DateTime, Float, ForeignKey, Text, Integer
+from sqlalchemy.types import UserDefinedType
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -59,8 +60,6 @@ class ArticleAnalysis(Base):
 
     # Relationships
     article = relationship("Article", back_populates="analysis")
-
-from sqlalchemy.types import UserDefinedType
 
 class PGVector(UserDefinedType):
     """Custom SQLAlchemy type for pgvector support without external dependencies."""

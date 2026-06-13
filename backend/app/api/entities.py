@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/v2/entities", tags=["Entities"])
 
 @router.get("")
 async def list_entities(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1),
     db: AsyncSession = Depends(get_db)
 ):
     """List most frequently mentioned entities."""

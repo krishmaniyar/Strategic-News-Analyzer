@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
+from app.api import auth, articles, admin, entities, events, analyst, forecasts, feed, risk_map
 
 logger = get_logger(__name__)
 
@@ -33,8 +34,6 @@ app.add_middleware(
 # Prometheus metrics at GET /metrics
 Instrumentator().instrument(app).expose(app)
 
-from app.api import auth, articles, admin, entities, events, analyst, forecasts, feed
-
 # Include API routers (versioned v2)
 app.include_router(auth.router, prefix="/api/v2/auth", tags=["Authentication"])
 app.include_router(articles.router, prefix="/api/v2/articles", tags=["Articles"])
@@ -44,6 +43,7 @@ app.include_router(events.router)
 app.include_router(analyst.router)
 app.include_router(forecasts.router)
 app.include_router(feed.router)
+app.include_router(risk_map.router)
 
 @app.get("/health", tags=["Health"])
 async def health_check():

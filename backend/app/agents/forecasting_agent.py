@@ -64,7 +64,7 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
     # Save forecast
     insert_res = await db.execute(text("""
         INSERT INTO forecasts (event_id, topic, prediction, confidence, timeframe, risk_level, key_scenarios, key_risks, evidence_summary, chain_of_thought)
-        VALUES (:event_id, :topic, :prediction, :confidence, :timeframe, :risk_level, :key_scenarios::jsonb, :key_risks::jsonb, :evidence_summary, :chain_of_thought)
+        VALUES (:event_id, :topic, :prediction, :confidence, :timeframe, :risk_level, CAST(:key_scenarios AS jsonb), CAST(:key_risks AS jsonb), :evidence_summary, :chain_of_thought)
         RETURNING id
     """), {
         "event_id": event_id,
@@ -78,9 +78,9 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
         "evidence_summary": forecast_json.get("evidence_summary", ""),
         "chain_of_thought": forecast_json.get("chain_of_thought", "")
     })
-    
+
     forecast_id = str(insert_res.scalar())
-    
+
     # Optionally save evidence links
     for source in rag_result.get("sources", []):
         await db.execute(text("""
@@ -88,8 +88,8 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
             VALUES (:forecast_id, :article_id)
             ON CONFLICT DO NOTHING
         """), {"forecast_id": forecast_id, "article_id": source["id"]})
-        
+
     await db.commit()
     logger.info("forecast_generation_success", event_id=event_id, forecast_id=forecast_id)
-    
+
     return forecast_json

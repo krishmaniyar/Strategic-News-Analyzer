@@ -29,7 +29,10 @@ export function EntityGraph({ data }: { data: EntityGraphData }) {
     // Setup simulation
     // Nodes need to be cloned for d3
     const nodes = data.nodes.map(d => ({ ...d })) as any[]
-    const links = data.edges.map(d => ({ ...d, source: d.from_entity_id, target: d.to_entity_id })) as any[]
+    const nodeIds = new Set(nodes.map(n => String(n.id)))
+    const links = data.edges
+      .filter(d => nodeIds.has(String(d.from_entity_id)) && nodeIds.has(String(d.to_entity_id)))
+      .map(d => ({ ...d, source: String(d.from_entity_id), target: String(d.to_entity_id) })) as any[]
 
     const simulation = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links).id((d: any) => d.id).distance(100))

@@ -12,7 +12,7 @@ async def verify_token(
 ) -> dict:
     """Verify Supabase JWT token against the Supabase Auth API and return user profile."""
     token = credentials.credentials
-    
+
     # We query Supabase Auth directly to verify the user token
     async with httpx.AsyncClient() as client:
         try:
@@ -31,5 +31,5 @@ async def verify_token(
     if resp.status_code != 200:
         logger.warning("auth_failed", status_code=resp.status_code, body=resp.text[:200])
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
-        
+
     return resp.json()

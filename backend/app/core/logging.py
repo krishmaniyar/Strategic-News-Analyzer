@@ -6,7 +6,7 @@ from app.core.config import settings
 def setup_logging():
     # Configure standard library logging
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
-    
+
     # Processors for structlog
     processors = [
         structlog.stdlib.add_log_level,

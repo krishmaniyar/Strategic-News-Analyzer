@@ -89,7 +89,7 @@ export function LiveNewsFeed({ region }: { region?: string }) {
         const res = await fetch(`http://localhost:8000${url}`)
         if (res.ok) {
           const data = await res.json()
-          setHistorical(data.items || [])
+          setHistorical(data.articles || [])
         }
       } catch (e) {
         console.error("Failed to fetch history", e)

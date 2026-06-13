@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from langdetect import detect_langs
 from app.core.logging import get_logger
 from app.ai.groq_client import groq_client
@@ -16,12 +15,12 @@ async def analyze_article(article: Article, repo: ArticleRepository) -> dict:
     """
     title = article.title
     content = article.content_raw or ""
-    
+
     # Step 1: Language Detection
     original_language = "en"
     translated_title = title
     translated_content = content
-    
+
     try:
         langs = detect_langs(content if content.strip() else title)
         if langs:
@@ -34,26 +33,26 @@ async def analyze_article(article: Article, repo: ArticleRepository) -> dict:
                 translated_title, translated_content = await _translate(title, content, top_lang)
     except Exception as e:
         logger.error("language_detection_failed", article_id=article.id, error=str(e))
-        
+
     # We will analyze the translated (or original English) text
     text_to_analyze = f"Title: {translated_title}\n\nContent: {translated_content}"
-    
+
     # Step 2: Sentiment, Bias, and Summarization in parallel
     sentiment_task = _analyze_sentiment(text_to_analyze)
     bias_task = _analyze_bias(text_to_analyze)
     summary_task = _analyze_summary(text_to_analyze)
-    
+
     sentiment_res, bias_res, summary_res = await asyncio.gather(
         sentiment_task, bias_task, summary_task
     )
-    
+
     # Step 3: Strategic Scorer (requires sentiment and summary)
     strategic_res = await _analyze_strategic_score(
         summary=summary_res.get("summary", ""),
         sentiment_label=sentiment_res.get("sentiment_label", "neutral"),
         text_content=text_to_analyze
     )
-    
+
     analysis_data = {
         "sentiment_label": sentiment_res.get("sentiment_label", "neutral"),
         "sentiment_score": sentiment_res.get("sentiment_score", 0.0),
@@ -68,11 +67,11 @@ async def analyze_article(article: Article, repo: ArticleRepository) -> dict:
         "translated_content": translated_content if original_language != "en" else None,
         "original_language": original_language
     }
-    
+
     # Save to DB and assign backref relationship
     analysis = await repo.save_analysis(article.id, analysis_data)
     article.analysis = analysis
-    
+
     return analysis_data
 
 async def _translate(title: str, content: str, source_lang: str) -> tuple[str, str]:
@@ -84,14 +83,14 @@ async def _translate(title: str, content: str, source_lang: str) -> tuple[str, s
         "- 'translated_content': the English translation of the content"
     )
     user_prompt = f"Source Language: {source_lang}\nTitle: {title}\nContent: {content}"
-    
+
     try:
         if provider == "groq":
             res = await groq_client.chat_json(model, system_prompt, user_prompt, max_tokens=1500)
         else:
             prompt = f"{system_prompt}\n\nUser Content:\n{user_prompt}"
             res = await ollama_client.generate_json(model, prompt)
-        
+
         return res.get("translated_title", title), res.get("translated_content", content)
     except Exception as e:
         logger.error("translation_failed", error=str(e))
@@ -172,8 +171,8 @@ async def _analyze_strategic_score(summary: str, sentiment_label: str, text_cont
         return {}
 
 # Celery wrapper
-from app.core.celery_app import celery_app
-from app.core.database import SessionLocal
+from app.core.celery_app import celery_app  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
 
 @celery_app.task(name="agents.analyze_article")
 def analyze_article_task(article_id: str):
@@ -182,7 +181,7 @@ def analyze_article_task(article_id: str):
         from app.db.repositories.article_repo import ArticleRepository
         from app.db.models import Article
         from sqlalchemy import select
-        
+
         async with SessionLocal() as db:
             repo = ArticleRepository(db)
             stmt = select(Article).where(Article.id == article_id)

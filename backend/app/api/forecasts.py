@@ -30,22 +30,32 @@ async def resolve_forecast(forecast_id: str, request: ResolveRequest, db: AsyncS
     forecast = result.fetchone()
     if not forecast:
         raise HTTPException(status_code=404, detail="Forecast not found")
-        
+
     brier_score = (forecast.confidence - float(request.occurred)) ** 2
-    
+
     await db.execute(text("""
         UPDATE forecasts SET outcome_occurred = :occurred, brier_score = :brier, resolved_at = :resolved_at
         WHERE id = :id
     """), {"occurred": request.occurred, "brier": brier_score, "resolved_at": datetime.utcnow(), "id": forecast_id})
     await db.commit()
-    
+
     return {"status": "resolved", "brier_score": brier_score}
+
+@router.get("/")
+async def list_forecasts(limit: int = Query(50, ge=1), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(text("""
+        SELECT id, event_id, topic, prediction, confidence, timeframe, risk_level, key_scenarios, key_risks, evidence_summary, chain_of_thought, outcome_occurred, brier_score, created_at, expires_at, resolved_at
+        FROM forecasts
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """), {"limit": limit})
+    return [dict(row._mapping) for row in result]
 
 @router.get("/accuracy")
 async def get_accuracy(db: AsyncSession = Depends(get_db)):
     result = await db.execute(text("""
-        SELECT AVG(brier_score) as avg_brier, COUNT(*) as resolved_count 
-        FROM forecasts 
+        SELECT AVG(brier_score) as avg_brier, COUNT(*) as resolved_count
+        FROM forecasts
         WHERE resolved_at IS NOT NULL
     """))
     row = result.fetchone()

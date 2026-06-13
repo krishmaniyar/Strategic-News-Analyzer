@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import Optional
 from app.core.database import get_db
 from app.db.repositories.article_repo import ArticleRepository
 
@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/")
 async def list_articles(
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(100, ge=1),
     offset: int = Query(0, ge=0),
     processed_only: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db)
@@ -16,7 +16,7 @@ async def list_articles(
     """Retrieve ingested news articles sorted by publication date descending."""
     repo = ArticleRepository(db)
     articles_list = await repo.get_articles(limit=limit, offset=offset, processed_only=processed_only)
-    
+
     # Format database models as simple JSON dicts
     results = []
     for art in articles_list:
@@ -36,7 +36,7 @@ async def list_articles(
                 "key_drivers": art.analysis.key_drivers,
                 "affected_regions": art.analysis.affected_regions,
             }
-            
+
         results.append({
             "id": str(art.id),
             "title": art.title,
@@ -48,7 +48,7 @@ async def list_articles(
             "source_id": str(art.source_id) if art.source_id else None,
             "analysis": analysis_data
         })
-        
+
     return {
         "count": len(results),
         "limit": limit,

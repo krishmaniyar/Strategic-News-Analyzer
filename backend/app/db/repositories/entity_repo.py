@@ -1,4 +1,3 @@
-import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
@@ -29,12 +28,12 @@ async def upsert_relation(
         text("""
         INSERT INTO entity_relations
             (from_entity_id, to_entity_id, relation_type, confidence, evidence_count, source_article_ids)
-        VALUES (:from_id, :to_id, :relation_type, :confidence, 1, :source_article_ids::jsonb)
+        VALUES (:from_id, :to_id, :relation_type, :confidence, 1, CAST(:source_article_ids AS jsonb))
         ON CONFLICT (from_entity_id, to_entity_id, relation_type) DO UPDATE SET
             evidence_count = entity_relations.evidence_count + 1,
             confidence = (entity_relations.confidence * entity_relations.evidence_count + :confidence)
                         / (entity_relations.evidence_count + 1),
-            source_article_ids = entity_relations.source_article_ids || :source_article_ids::jsonb,
+            source_article_ids = entity_relations.source_article_ids || CAST(:source_article_ids AS jsonb),
             updated_at = NOW()
         """),
         {"from_id": from_id, "to_id": to_id, "relation_type": relation_type, "confidence": confidence, "source_article_ids": f'["{article_id}"]'}
@@ -46,20 +45,20 @@ async def get_entity_subgraph(db: AsyncSession, entity_id: str, hops: int = 2) -
     nodes = await db.execute(text("""
         WITH RECURSIVE entity_graph AS (
             SELECT e.id, e.name, e.type, e.mention_count, 0 AS depth,
-                   ARRAY[e.id::text] AS path
+                   ARRAY[CAST(e.id AS text)] AS path
             FROM entities e WHERE e.id = :entity_id
             UNION ALL
             SELECT e2.id, e2.name, e2.type, e2.mention_count, eg.depth + 1,
-                   eg.path || e2.id::text
+                   eg.path || CAST(e2.id AS text)
             FROM entity_graph eg
             JOIN entity_relations er ON er.from_entity_id = eg.id
             JOIN entities e2 ON e2.id = er.to_entity_id
-            WHERE eg.depth < :hops AND NOT (e2.id::text = ANY(eg.path))
+            WHERE eg.depth < :hops AND NOT (CAST(e2.id AS text) = ANY(eg.path))
         )
         SELECT DISTINCT id, name, type, mention_count, depth FROM entity_graph
         ORDER BY depth, mention_count DESC LIMIT 100
     """), {"entity_id": entity_id, "hops": hops})
-    
+
     nodes_list = [dict(row._mapping) for row in nodes]
     node_ids = [str(n["id"]) for n in nodes_list]
 

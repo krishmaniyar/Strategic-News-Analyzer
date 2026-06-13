@@ -2,9 +2,8 @@ from app.ai.ollama_client import ollama_client
 from app.ai.groq_client import groq_client
 from app.rag.retriever import hybrid_retrieve
 from sqlalchemy.ext.asyncio import AsyncSession
-import json
 
-RAG_SYSTEM_PROMPT = """You are a geopolitical intelligence analyst with access to a 
+RAG_SYSTEM_PROMPT = """You are a geopolitical intelligence analyst with access to a
 curated database of recent news articles. Answer questions using ONLY the provided context.
 
 Rules:

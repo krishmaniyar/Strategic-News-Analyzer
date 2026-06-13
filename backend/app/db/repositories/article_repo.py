@@ -57,7 +57,7 @@ class ArticleRepository:
     ) -> Optional[Article]:
         """Insert a raw article into the database."""
         source_id = await self.get_source_id_by_name(source_name)
-        
+
         try:
             # Re-verify hash existence before inserting to prevent race conditions
             if await self.exists_by_hash(hash_id):
@@ -99,7 +99,7 @@ class ArticleRepository:
 
     async def get_unprocessed(self, limit: int = 50) -> List[Article]:
         """Fetch articles that are not yet marked as processed."""
-        stmt = select(Article).where(Article.is_processed == False).limit(limit)
+        stmt = select(Article).where(not Article.is_processed).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -149,6 +149,6 @@ class ArticleRepository:
                 model="nomic-embed-text"
             )
             self.db.add(emb_obj)
-        
+
         await self.db.flush()
         logger.info("embeddings_saved", article_id=article_id, count=len(chunks))

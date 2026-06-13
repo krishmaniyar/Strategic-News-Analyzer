@@ -19,8 +19,8 @@ class GDELTAdapter(BaseSourceAdapter):
             "query": self.QUERY,
             "mode": "artlist",
             "format": "json",
-            "maxrecords": 10,
-            "timespan": "24h" # Fetch articles from the last 24 hours
+            "maxrecords": 250,
+            "timespan": "72h" # Fetch articles from the last 72 hours
         }
 
         try:
@@ -54,6 +54,6 @@ class GDELTAdapter(BaseSourceAdapter):
                 published_at=published_at,
                 language="en"
             )
-            
+
             if self._is_valid(article):
                 yield article

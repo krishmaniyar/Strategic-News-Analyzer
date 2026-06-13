@@ -64,7 +64,7 @@ async def find_matching_event(db: AsyncSession, centroid: list[float], threshold
 async def run_clustering(db: AsyncSession):
     """Fetch unclustered articles and run HDBSCAN."""
     logger.info("clustering_start")
-    
+
     # Fetch recent articles with their embeddings
     result = await db.execute(text("""
         SELECT a.id, a.title, a.content_raw, ae.embedding
@@ -74,49 +74,49 @@ async def run_clustering(db: AsyncSession):
           AND NOT EXISTS (SELECT 1 FROM event_articles ea WHERE ea.article_id = a.id)
     """))
     articles = result.fetchall()
-    
+
     if len(articles) < HDBSCAN_PARAMS["min_cluster_size"]:
         logger.info("clustering_skip_not_enough_articles", count=len(articles))
         return
-        
+
     # parse embeddings
     def parse_emb(emb):
         if isinstance(emb, str):
             return [float(x) for x in emb.strip("[]").split(",") if x.strip()]
         return list(emb)
-        
+
     embeddings = np.array([parse_emb(row.embedding) for row in articles])
-    
+
     # Compute cosine distance matrix (1 - cosine similarity)
     sim_matrix = cosine_similarity(embeddings)
     dist_matrix = 1.0 - sim_matrix
     np.fill_diagonal(dist_matrix, 0)
-    
+
     clusterer = HDBSCAN(**HDBSCAN_PARAMS)
     labels = clusterer.fit_predict(dist_matrix)
-    
+
     unique_labels = set(labels)
     clusters = {label: [] for label in unique_labels if label != -1}
-    
+
     for idx, label in enumerate(labels):
         if label != -1:
             clusters[label].append(articles[idx])
-            
+
     for label, cluster_articles in clusters.items():
         if len(cluster_articles) < HDBSCAN_PARAMS["min_cluster_size"]:
             continue
-            
+
         cluster_embeddings = [parse_emb(art.embedding) for art in cluster_articles]
         centroid = np.mean(cluster_embeddings, axis=0).tolist()
-        
+
         # Check if matches existing event
         event_id = await find_matching_event(db, centroid)
-        
+
         if not event_id:
             # Generate new event metadata
             summaries = "\\n".join([f"- {art.title}: {str(art.content_raw)[:200]}" for art in cluster_articles])
             prompt = EVENT_GENERATION_PROMPT.format(article_summaries=summaries)
-            
+
             gen_result = await ollama_client.generate_json("qwen2.5:7b", prompt)
             if not isinstance(gen_result, dict):
                 gen_result = {
@@ -127,7 +127,7 @@ async def run_clustering(db: AsyncSession):
                     "involved_entities": [],
                     "affected_regions": []
                 }
-                
+
             insert_res = await db.execute(text("""
                 INSERT INTO events (title, description, status, risk_level, involved_entity_ids, affected_regions, centroid)
                 VALUES (:title, :desc, :status, :risk, :entities::jsonb, :regions::jsonb, :centroid::vector)
@@ -148,7 +148,7 @@ async def run_clustering(db: AsyncSession):
                 UPDATE events SET centroid = :centroid::vector, last_updated = NOW()
                 WHERE id = :event_id
             """), {"centroid": centroid, "event_id": event_id})
-            
+
         # Link articles to event
         for art in cluster_articles:
             await db.execute(text("""
@@ -156,6 +156,6 @@ async def run_clustering(db: AsyncSession):
                 VALUES (:event_id, :article_id, 1.0)
                 ON CONFLICT DO NOTHING
             """), {"event_id": event_id, "article_id": art.id})
-            
+
     await db.commit()
     logger.info("clustering_complete", clusters_found=len(clusters))

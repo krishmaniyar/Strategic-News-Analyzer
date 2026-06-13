@@ -1,7 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
 import json
-import asyncio
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +38,6 @@ async def feed_endpoint(websocket: WebSocket, token: str = None):
     try:
         while True:
             # Keep connection alive
-            data = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)

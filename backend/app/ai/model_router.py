@@ -22,11 +22,11 @@ def get_model(task: TaskType) -> tuple[str, str]:
         TaskType.TRANSLATION:         ("llama-3.1-8b-instant",      "groq"),
         TaskType.SUMMARIZATION:       ("llama-3.1-8b-instant",      "groq"),
         TaskType.STRATEGIC_SCORING:   ("llama-3.1-8b-instant",      "groq"),
-        
-        # Local model routing configured for the pulled qwen2.5:7b model
-        TaskType.ENTITY_EXTRACTION:   ("qwen2.5:7b",                "ollama"),
-        TaskType.KG_EXTRACTION:       ("qwen2.5:7b",                "ollama"),
-        
+
+        # Routing configured to use Groq for entity extraction
+        TaskType.ENTITY_EXTRACTION:   ("llama-3.1-8b-instant",      "groq"),
+        TaskType.KG_EXTRACTION:       ("llama-3.1-8b-instant",      "groq"),
+
         # Advanced cloud LLM routing
         TaskType.FORECASTING:         ("llama-3.3-70b-versatile",   "groq"),
         TaskType.RAG_QA:              ("llama-3.3-70b-versatile",   "groq"),

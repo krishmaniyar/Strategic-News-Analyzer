@@ -17,31 +17,43 @@ class GroqClient:
     def __init__(self):
         self._client = AsyncGroq(api_key=settings.groq_api_key)
         self._redis = None
+        self._redis_offline = False
         self._in_memory_tokens = 0
 
     async def _get_redis(self) -> aioredis.Redis:
         if not self._redis:
-            self._redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+            self._redis = aioredis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5
+            )
         return self._redis
 
     async def _check_budget(self, estimated_tokens: int = 500) -> bool:
         """Return False if daily budget is exceeded."""
+        if self._redis_offline:
+            return (self._in_memory_tokens + estimated_tokens) <= settings.groq_daily_token_budget
         try:
             r = await self._get_redis()
             used = int(await r.get("groq_tokens_today") or 0)
             return (used + estimated_tokens) <= settings.groq_daily_token_budget
         except Exception:
-            # Fallback to local in-memory tracking if Redis is offline
+            self._redis_offline = True
+            logger.info("redis_offline_falling_back_to_memory")
             return (self._in_memory_tokens + estimated_tokens) <= settings.groq_daily_token_budget
 
     async def _increment_budget(self, tokens: int):
         """Record token consumption."""
+        if self._redis_offline:
+            self._in_memory_tokens += tokens
+            return
         try:
             r = await self._get_redis()
             await r.incrby("groq_tokens_today", tokens)
             await r.expire("groq_tokens_today", 86400)  # Reset daily
         except Exception:
-            # Fallback to local in-memory tracking if Redis is offline
+            self._redis_offline = True
             self._in_memory_tokens += tokens
 
     async def chat_json(
@@ -74,11 +86,11 @@ class GroqClient:
                     response_format={"type": "json_object"}
                 )
                 content = resp.choices[0].message.content
-                
+
                 # Track token usage
                 if resp.usage:
                     await self._increment_budget(resp.usage.total_tokens)
-                
+
                 return json.loads(content)
 
             except Exception as e:
@@ -88,7 +100,7 @@ class GroqClient:
                     logger.warning("groq_rate_limited_retrying", attempt=attempt, wait_time=wait_time)
                     await asyncio.sleep(wait_time)  # Exponential backoff
                     continue
-                    
+
                 logger.error("groq_call_failed", error=str(e), attempt=attempt)
                 return {}
 
@@ -121,7 +133,7 @@ class GroqClient:
                 temperature=0.1,
                 stream=True
             )
-            
+
             async for chunk in stream:
                 if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
                     yield chunk.choices[0].delta.content
