@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { GlobalRiskMap } from "@/components/maps/GlobalRiskMap"
 import { CountryArticlePanel } from "@/components/maps/CountryArticlePanel"
 import { AIAnalystChat } from "@/components/analyst/AIAnalystChat"
+import { FetchNewsButton } from "@/components/feed/FetchNewsButton"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Globe, AlertTriangle, TrendingDown, BarChart3, Loader2 } from "lucide-react"
 
@@ -66,9 +67,12 @@ export default function Home() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Global Risk Overview</h1>
-        <p className="text-slate-400 mt-1">Real-time geopolitical threat assessment from {totalArticles > 0 ? `${totalArticles} analyzed articles` : "live intelligence data"}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Global Risk Overview</h1>
+          <p className="text-slate-400 mt-1">Real-time geopolitical threat assessment from {totalArticles > 0 ? `${totalArticles} analyzed articles` : "live intelligence data"}</p>
+        </div>
+        <FetchNewsButton compact />
       </div>
 
       {/* Summary stat cards */}

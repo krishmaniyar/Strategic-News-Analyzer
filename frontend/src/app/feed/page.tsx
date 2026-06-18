@@ -1,4 +1,5 @@
 import { LiveNewsFeed } from "@/components/feed/LiveNewsFeed"
+import { FetchNewsButton } from "@/components/feed/FetchNewsButton"
 
 export default function FeedPage() {
   return (
@@ -7,6 +8,7 @@ export default function FeedPage() {
         <h1 className="text-3xl font-bold tracking-tight">Intelligence Feed</h1>
         <p className="text-slate-400 mt-1">Real-time stream of analyzed geopolitical articles</p>
       </div>
+      <FetchNewsButton />
       <LiveNewsFeed />
     </div>
   )
