@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🛡️ Strategic News Analyzer
 
@@ -23,13 +23,13 @@ An enterprise-grade platform that continuously ingests global news from multiple
 - [Project Overview](#project-overview)
 - [Architecture Overview](#architecture-overview)
 - [System Design Diagrams](#system-design-diagrams)
-- [Installation \& Setup](#installation--setup)
+- [Installation & Setup](#installation--setup)
 - [Usage](#usage)
 - [API Endpoints](#api-endpoints)
-- [Performance Measurement \& Execution Timing](#performance-measurement--execution-timing)
+- [Performance Measurement & Execution Timing](#performance-measurement--execution-timing)
 - [Project Structure](#project-structure)
-- [Configuration \& Hyperparameters](#configuration--hyperparameters)
-- [Metrics \& Evaluation](#metrics--evaluation)
+- [Configuration & Hyperparameters](#configuration--hyperparameters)
+- [Metrics & Evaluation](#metrics--evaluation)
 - [Dependencies](#dependencies)
 - [Contributing Guidelines](#contributing-guidelines)
 - [License](#license)
@@ -117,28 +117,28 @@ SNA follows a **decoupled microservices architecture** with clear separation bet
 ```mermaid
 graph TB
     subgraph Frontend["Frontend (Next.js 16)"]
-        Pages["Pages<br/>Dashboard, Feed, Events,<br/>Entities, Forecast, Analyst, Analytics"]
-        Components["Components<br/>GlobalRiskMap, AIAnalystChat,<br/>FetchNewsButton, EntityGraph"]
-        Lib["Lib<br/>Groq Client, Pipeline,<br/>News Fetchers, Supabase"]
-        Store["Store<br/>Zustand (Realtime)"]
-        Types["Types<br/>Article, Entity, Event,<br/>Forecast, Alert"]
+        Pages["Pages<br>Dashboard, Feed, Events,<br>Entities, Forecast, Analyst, Analytics"]
+        Components["Components<br>GlobalRiskMap, AIAnalystChat,<br>FetchNewsButton, EntityGraph"]
+        Lib["Lib<br>Groq Client, Pipeline,<br>News Fetchers, Supabase"]
+        Store["Store<br>Zustand (Realtime)"]
+        Types["Types<br>Article, Entity, Event,<br>Forecast, Alert"]
     end
 
     subgraph Backend["Backend (FastAPI)"]
-        API["API Layer<br/>auth, articles, admin, entities,<br/>events, analyst, forecasts,<br/>feed, risk_map"]
-        Agents["AI Agents<br/>AnalysisAgent, EmbeddingAgent,<br/>EntityAgent, ClusteringAgent,<br/>ForecastingAgent"]
-        Ingestion["Ingestion Engine<br/>Coordinator, Adapters<br/>(NewsAPI, GNews, MediaStack,<br/>RSS, GDELT), Deduplicator"]
-        RAG["RAG Engine<br/>HybridRetriever, QueryEngine"]
-        AI["AI Providers<br/>GroqClient, OllamaClient,<br/>ModelRouter"]
-        Core["Core<br/>Config, Database, Logging,<br/>Security, Metrics, Celery"]
-        DB["DB Layer<br/>SQLAlchemy Models,<br/>Repositories"]
+        API["API Layer<br>auth, articles, admin, entities,<br>events, analyst, forecasts,<br>feed, risk_map"]
+        Agents["AI Agents<br>AnalysisAgent, EmbeddingAgent,<br>EntityAgent, ClusteringAgent,<br>ForecastingAgent"]
+        Ingestion["Ingestion Engine<br>Coordinator, Adapters<br>(NewsAPI, GNews, MediaStack,<br>RSS, GDELT), Deduplicator"]
+        RAG["RAG Engine<br>HybridRetriever, QueryEngine"]
+        AI["AI Providers<br>GroqClient, OllamaClient,<br>ModelRouter"]
+        Core["Core<br>Config, Database, Logging,<br>Security, Metrics, Celery"]
+        DB["DB Layer<br>SQLAlchemy Models,<br>Repositories"]
     end
 
     subgraph Infrastructure["Infrastructure"]
-        Supabase["Supabase<br/>PostgreSQL + pgvector + Auth"]
-        Redis["Redis<br/>Celery Broker + Token Budget"]
-        Prometheus["Prometheus<br/>Metrics Collection"]
-        Flower["Flower<br/>Celery Monitoring"]
+        Supabase["Supabase<br>PostgreSQL + pgvector + Auth"]
+        Redis["Redis<br>Celery Broker + Token Budget"]
+        Prometheus["Prometheus<br>Metrics Collection"]
+        Flower["Flower<br>Celery Monitoring"]
     end
 
     Pages --> Components
@@ -175,7 +175,7 @@ graph TB
 
 ```mermaid
 flowchart TD
-    A([Celery Beat Timer<br/>Every 15 min]) --> B[Start Ingestion Pipeline]
+    A([Celery Beat Timer<br>Every 15 min]) --> B[Start Ingestion Pipeline]
     B --> C{For Each Adapter}
     C --> D[Fetch Articles from Source API]
     D --> E[Compute SHA-256 Hash]
@@ -192,15 +192,15 @@ flowchart TD
     M --> M2[Bias Detection]
     M --> M3[Summarization]
     M1 & M2 & M3 --> N[Strategic Scoring]
-    N --> O[Generate 768-dim Embedding<br/>via Ollama nomic-embed-text]
-    O --> P[Extract Entities & Relations]
+    N --> O[Generate 768-dim Embedding<br>via Ollama nomic-embed-text]
+    O --> P[Extract Entities and Relations]
     P --> Q[Upsert to Knowledge Graph]
     Q --> R[Save Analysis + Embeddings to DB]
     R --> S[Broadcast via WebSocket]
     S --> T[Commit Transaction]
     T --> C
     G --> C
-    C -- All done --> U([Pipeline Complete<br/>Log Duration & Stats])
+    C -- All done --> U([Pipeline Complete<br>Log Duration and Stats])
 ```
 
 **Explanation:** This activity diagram traces the complete lifecycle of a news article from ingestion to dashboard. The Celery Beat scheduler triggers the pipeline every 15 minutes. Each of the 5 source adapters is processed sequentially, while the AI analysis tasks (sentiment, bias, summarization) run in parallel via `asyncio.gather()`. The pipeline includes hash-based deduplication, automatic language detection and translation, vector embedding generation, and real-time WebSocket broadcast.
@@ -230,7 +230,7 @@ flowchart LR
         UC10["Auto-Ingest Articles"]
         UC11["Auto-Cluster Events"]
         UC12["Auto-Generate Forecasts"]
-        UC13["Manage Watchlists & Alerts"]
+        UC13["Manage Watchlists and Alerts"]
         UC14["View Analytics Dashboard"]
     end
 
@@ -269,17 +269,17 @@ sequenceDiagram
     participant Groq as Groq API (Llama 3.3-70B)
 
     User->>FE: Enter geopolitical question
-    FE->>API: POST /api/v2/analyst/query_stream<br/>{"question": "..."}
+    FE->>API: POST /api/v2/analyst/query_stream
 
     API->>Ollama: Embed question → 768-dim vector
     Ollama-->>API: query_embedding[]
 
-    API->>PG: Hybrid Retrieval<br/>(1) Vector ANN search (top-20)<br/>(2) Full-text search (top-20)
+    API->>PG: Hybrid Retrieval (Vector ANN + FTS)
     PG-->>API: Candidate chunks + metadata
 
-    Note over API: Reciprocal Rank Fusion (RRF)<br/>score = 1/(60+v_rank) + 1/(60+f_rank)<br/>Select top-5 by RRF score
+    Note over API: RRF Fusion: score = 1/(60+v_rank) + 1/(60+f_rank). Select top-5.
 
-    API->>Groq: Stream chat completion<br/>System: RAG analyst prompt<br/>User: Context + Question
+    API->>Groq: Stream chat completion with RAG context
     
     loop SSE Streaming
         Groq-->>API: Token chunk
@@ -1068,4 +1068,4 @@ MIT License — Copyright (c) 2026 KBM
   <br/>
   <sub>Strategic News Analyzer v2.0.0</sub>
 </div>
-]]>
+
