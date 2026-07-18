@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { EntityGraph } from "@/components/entities/EntityGraph"
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -27,7 +28,7 @@ export default function EntitiesPage() {
     setLoadingList(true)
     setErrorMessage(null)
     try {
-      const res = await fetch("http://localhost:8000/api/v2/entities?limit=50")
+      const res = await fetch(`${API_BASE_URL}/api/v2/entities?limit=50`)
       if (res.ok) {
         const data = await res.json()
         setEntities(data)
@@ -50,7 +51,7 @@ export default function EntitiesPage() {
     if (!entityId) return
     setLoadingGraph(true)
     try {
-      const res = await fetch(`http://localhost:8000/api/v2/entities/${entityId}/graph?hops=2`)
+      const res = await fetch(`${API_BASE_URL}/api/v2/entities/${entityId}/graph?hops=2`)
       if (res.ok) {
         const data = await res.json()
         setGraphData(data)

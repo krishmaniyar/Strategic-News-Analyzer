@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,7 +28,7 @@ export default function EventsPage() {
     setLoading(true)
     setErrorMessage(null)
     try {
-      const res = await fetch("http://localhost:8000/api/v2/events")
+      const res = await fetch(`${API_BASE_URL}/api/v2/events`)
       if (res.ok) {
         const data = await res.json()
         setEvents(data)
@@ -51,7 +52,7 @@ export default function EventsPage() {
     setForecastMessage(null)
     setErrorMessage(null)
     try {
-      const res = await fetch("http://localhost:8000/api/v2/forecasts/generate", {
+      const res = await fetch(`${API_BASE_URL}/api/v2/forecasts/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: eventId })

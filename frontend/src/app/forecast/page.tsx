@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -44,8 +45,8 @@ export default function ForecastPage() {
     setLoading(true)
     setErrorMessage(null)
     try {
-      const forecastsRes = await fetch("http://localhost:8000/api/v2/forecasts/")
-      const statsRes = await fetch("http://localhost:8000/api/v2/forecasts/accuracy")
+      const forecastsRes = await fetch(`${API_BASE_URL}/api/v2/forecasts/`)
+      const statsRes = await fetch(`${API_BASE_URL}/api/v2/forecasts/accuracy`)
       
       if (forecastsRes.ok && statsRes.ok) {
         const forecastsData = await forecastsRes.json()
@@ -70,7 +71,7 @@ export default function ForecastPage() {
   const handleResolveForecast = async (forecastId: string, occurred: boolean) => {
     setResolvingId(forecastId)
     try {
-      const res = await fetch(`http://localhost:8000/api/v2/forecasts/${forecastId}/resolve`, {
+      const res = await fetch(`${API_BASE_URL}/api/v2/forecasts/${forecastId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ occurred })

@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { API_BASE_URL, WS_BASE_URL } from "@/lib/api"
 import { useRealtimeStore } from "@/store/realtime"
 import { Article } from "@/types"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -57,7 +58,7 @@ export function LiveNewsFeed({ region }: { region?: string }) {
 
   useEffect(() => {
     // Connect WebSocket
-    const ws = new WebSocket(`ws://localhost:8000/ws/feed`)
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/feed`)
     
     ws.onopen = () => setConnectionStatus("connected")
     ws.onclose = () => setConnectionStatus("disconnected")
@@ -86,7 +87,7 @@ export function LiveNewsFeed({ region }: { region?: string }) {
       try {
         const url = region ? `/api/v2/articles?region=${encodeURIComponent(region)}` : `/api/v2/articles`
         // In real app, proxy via Next.js or use full backend URL
-        const res = await fetch(`http://localhost:8000${url}`)
+        const res = await fetch(`${API_BASE_URL}${url}`)
         if (res.ok) {
           const data = await res.json()
           setHistorical(data.articles || [])

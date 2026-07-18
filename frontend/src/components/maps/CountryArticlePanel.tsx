@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { X, ExternalLink, TrendingDown, TrendingUp, Minus, Shield, BarChart3, Newspaper } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
@@ -70,7 +71,7 @@ export function CountryArticlePanel({ country, riskData, isOpen, onClose }: Coun
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`http://localhost:8000/api/v2/dashboard/risk_map/articles?country=${encodeURIComponent(country)}`)
+        const res = await fetch(`${API_BASE_URL}/api/v2/dashboard/risk_map/articles?country=${encodeURIComponent(country)}`)
         if (!res.ok) throw new Error(`${res.status}`)
         const data = await res.json()
         setArticles(data.articles || [])

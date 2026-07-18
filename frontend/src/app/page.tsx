@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { GlobalRiskMap } from "@/components/maps/GlobalRiskMap"
 import { CountryArticlePanel } from "@/components/maps/CountryArticlePanel"
 import { AIAnalystChat } from "@/components/analyst/AIAnalystChat"
@@ -26,7 +27,7 @@ export default function Home() {
   useEffect(() => {
     const fetchRiskMap = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/v2/dashboard/risk_map")
+        const res = await fetch(`${API_BASE_URL}/api/v2/dashboard/risk_map`)
         if (!res.ok) throw new Error(`${res.status}`)
         const data = await res.json()
         setRiskData(data.countries || {})

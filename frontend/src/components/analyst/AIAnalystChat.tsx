@@ -1,5 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
+import { API_BASE_URL } from "@/lib/api"
 import { Card, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -204,7 +205,7 @@ export function AIAnalystChat() {
     setMessages(prev => [...prev, { id: asstId, role: "assistant", content: "" }])
 
     try {
-      const response = await fetch("http://localhost:8000/api/v2/analyst/query_stream", {
+      const response = await fetch(`${API_BASE_URL}/api/v2/analyst/query_stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMsg.content })

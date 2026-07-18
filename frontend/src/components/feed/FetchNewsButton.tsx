@@ -417,9 +417,9 @@ function PipelineModal({
                 </div>
               </div>
             </div>
-            {stats.duration_seconds && (
+            {typeof stats.duration_seconds === "number" && (
               <p className="text-center text-[11px] text-slate-400 mt-2">
-                Completed in {(stats.duration_seconds as number).toFixed(1)}s
+                Completed in {stats.duration_seconds.toFixed(1)}s
               </p>
             )}
           </div>
