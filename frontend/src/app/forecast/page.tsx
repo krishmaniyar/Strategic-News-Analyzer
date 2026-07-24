@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { API_BASE_URL } from "@/lib/api"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, RefreshCw, CheckCircle2, XCircle, Brain, Calendar, Shield, Gauge } from "lucide-react"
@@ -182,7 +182,7 @@ export default function ForecastPage() {
         <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-xl text-slate-400">
           <TrendingUp className="h-12 w-12 mx-auto text-slate-600 mb-4" />
           <p className="text-lg font-medium text-slate-200">No forecasts registered</p>
-          <p className="text-sm mt-1 max-w-sm mx-auto">Navigate to the Events page and select "Generate Intelligence Forecast" to run predictive models.</p>
+          <p className="text-sm mt-1 max-w-sm mx-auto">Navigate to the Events page and select &quot;Generate Intelligence Forecast&quot; to run predictive models.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -212,7 +212,7 @@ export default function ForecastPage() {
                 <div className="space-y-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">AI Analyst Prediction</span>
                   <p className="text-base text-slate-200 font-medium leading-relaxed bg-slate-900/40 p-4 border border-slate-800/80 rounded-xl">
-                    "{forecast.prediction}"
+                    &quot;{forecast.prediction}&quot;
                   </p>
                 </div>
 

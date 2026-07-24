@@ -5,7 +5,6 @@
 import { getSupabaseAdmin } from "./supabase-server";
 import {
   fetchAllSources,
-  type RawArticle,
   type SourceFetchResult,
 } from "./news-fetchers";
 import { analyzeArticle, extractEntities } from "./groq";

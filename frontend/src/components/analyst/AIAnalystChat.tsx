@@ -74,7 +74,7 @@ function extractAnswerText(content: string): string {
   }
   
   // The content starts from quoteIndex + 1
-  let startIndex = quoteIndex + 1;
+  const startIndex = quoteIndex + 1;
   
   // Extract characters up to the end of the string, handling escapes
   let result = "";

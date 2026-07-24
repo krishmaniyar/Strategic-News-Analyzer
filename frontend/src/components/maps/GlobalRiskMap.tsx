@@ -161,7 +161,6 @@ export function GlobalRiskMap({ riskData, selectedCountry, onCountryClick }: Glo
             const topoName = d.properties?.name
             const dbName = TOPO_TO_DB_NAME[topoName] || topoName
             const isSelected = selectedCountry && (dbName === selectedCountry || topoName === selectedCountry)
-            const data = riskData[dbName] || riskData[topoName]
 
             d3.select(this)
               .attr("stroke-width", isSelected ? 2.5 : 0.5)

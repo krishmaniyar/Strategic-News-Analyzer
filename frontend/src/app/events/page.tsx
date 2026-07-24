@@ -4,7 +4,7 @@ import { API_BASE_URL } from "@/lib/api"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, Layers, Globe, RefreshCw, Sparkles, TrendingUp, CheckCircle, XCircle } from "lucide-react"
+import { Layers, Globe, RefreshCw, Sparkles, CheckCircle, XCircle } from "lucide-react"
 
 interface EventItem {
   id: string
