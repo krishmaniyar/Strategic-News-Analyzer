@@ -5,10 +5,9 @@ Endpoints:
   GET /api/v2/dashboard/risk_map          → aggregated country risk data
   GET /api/v2/dashboard/risk_map/articles → articles for a specific country
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from typing import Optional
 from app.core.database import get_db
 
 router = APIRouter(prefix="/api/v2/dashboard", tags=["Dashboard"])
