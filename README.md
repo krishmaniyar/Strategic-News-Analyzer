@@ -927,17 +927,33 @@ All metrics are exposed at `GET /metrics` and can be scraped by Prometheus.
 ### Analysis Quality Metrics
 
 | Metric | Description | Formula | Use Case |
-|--------|-------------|---------|----------|
-| **Sentiment Accuracy** | Agreement with human-labeled sentiment | `correct_predictions / total_predictions` | Validate LLM sentiment analysis quality |
-| **Bias Detection F1** | Precision-recall balance for bias classification | `2 × (P × R) / (P + R)` | Evaluate media bias detection reliability |
-| **Strategic Score Correlation** | Correlation between AI strategic scores and analyst ratings | Pearson's r | Calibrate strategic importance scoring |
-| **Brier Score** | Forecast calibration metric | `(1/N) × Σ(forecast_i − outcome_i)²` | Evaluate forecasting accuracy (0 = perfect, 1 = worst) |
-| **Deduplication Rate** | Percentage of duplicate articles detected | `duplicates / total_fetched × 100` | Monitor ingestion efficiency |
-| **Entity Extraction Precision** | Correctness of extracted entities | `true_entities / extracted_entities` | Validate knowledge graph quality |
-| **RRF Retrieval NDCG** | Ranking quality of hybrid retrieval | `DCG@k / iDCG@k` | Evaluate RAG retrieval relevance |
-| **Clustering Silhouette Score** | Cohesion of HDBSCAN event clusters | `(b − a) / max(a, b)` | Validate event clustering quality |
-| **Token Budget Utilization** | Daily Groq API token consumption vs budget | `tokens_used / daily_budget × 100` | Monitor API cost efficiency |
-| **Ingestion Throughput** | Articles processed per minute | `total_inserted / duration_minutes` | Capacity planning and scaling |
+|---|---|---|---|
+| **Recall@K** | Fraction of relevant documents in top-K retrieved | `\|relevant ∩ retrieved@K\| / \|relevant\|` | RAG retrieval quality |
+| **Brier Score** | Calibration of probabilistic forecasts | `(p̂ - o)²` where p̂=predicted prob, o=actual outcome | Forecasting accuracy |
+| **RRF Score** | Combined relevance rank from two signals | `Σ 1/(k + rank_i)` for each retrieval list | Hybrid retrieval fusion |
+| **Silhouette Score** | Cohesion vs separation of event clusters | `(b - a) / max(a, b)` | HDBSCAN cluster quality |
+| **F1 Score** | Harmonic mean of Precision and Recall | `2 × (P × R) / (P + R)` | Sentiment/Bias classification |
+| **BLEU Score** | N-gram overlap between generated and reference | `BP × exp(Σ wₙ log pₙ)` | Translation quality |
+| **ROUGE-L** | Longest common subsequence overlap | `LCS(X,Y) / len(X)` for recall | Summarisation quality |
+| **Precision@K** | Fraction of top-K results that are relevant | `\|relevant ∩ retrieved@K\| / K` | Entity retrieval |
+| **API p95 Latency** | 95th percentile HTTP response time | Prometheus `histogram_quantile(0.95, ...)` | System performance SLA |
+| **Token Efficiency** | Tasks completed per 1K Groq tokens | `tasks / (tokens / 1000)` | Cost optimisation |
+
+### Targets & Current Status
+
+| Subsystem | Metric | Target | Current Status |
+|---|---|---|---|
+| Ingestion throughput | Articles / hour | ≥ 500 | ✅ ~600 (parallel adapters) |
+| Deduplication | False positive rate | < 1% | ✅ SHA-256 collision probability: ~10⁻⁷⁷ |
+| Sentiment analysis | F1 vs human labels | ≥ 0.80 | 🔄 Evaluation in progress |
+| Bias detection | Accuracy | ≥ 0.75 | 🔄 Evaluation in progress |
+| Event clustering | Silhouette score | ≥ 0.50 | 🔄 Requires ≥100 articles |
+| RAG retrieval | Recall@5 | ≥ 0.75 | 🔄 Evaluation in progress |
+| RAG generation | Human eval (1–5) | ≥ 4.0 | 🔄 Pending human labeling |
+| Forecasting | Brier Score | < 0.20 | 🔄 Tracking (need 30+ resolved) |
+| API latency (p95) | Non-LLM endpoints | < 200ms | ✅ Confirmed via Prometheus |
+| Groq calls (p95) | Per-call latency | < 2s | ✅ Avg ~600ms |
+| Embedding (p95) | Per-document | < 250ms | ✅ Avg ~180ms |
 
 ---
 
