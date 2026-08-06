@@ -1,202 +1,143 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { API_BASE_URL } from "@/lib/api"
-import { Card, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Bot, Send, User, ExternalLink } from "lucide-react"
+import { Bot, Send, User, ExternalLink, Sparkles } from "lucide-react"
 
 interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  sources?: { id: string; title: string; url: string }[];
+  id: string
+  role: "user" | "assistant"
+  content: string
+  sources?: { id: string; title: string; url: string }[]
 }
 
+const SUGGESTED = [
+  "What is the current risk status in the Middle East?",
+  "Analyze Iran-US relations based on recent articles",
+  "Which entities are most frequently involved in conflicts?",
+  "What are the key geopolitical risks for Southeast Asia?",
+]
+
 function parseCitationsAndStyles(text: string, isUser: boolean) {
-  const boldParts = text.split(/\*\*([^*]+)\*\*/g);
-  
+  const boldParts = text.split(/\*\*([^*]+)\*\*/g)
   return boldParts.flatMap((part, index) => {
-    const isBold = index % 2 === 1;
-    const citationRegex = /\[Source\s*(\d+)\]/gi;
-    const subParts = part.split(citationRegex);
-    
+    const isBold = index % 2 === 1
+    const citationRegex = /\[Source\s*(\d+)\]/gi
+    const subParts = part.split(citationRegex)
     const renderedSubparts = subParts.map((subPart, subIdx) => {
       if (subIdx % 2 === 1) {
-        const sourceNum = subPart;
         return (
-          <span 
-            key={subIdx} 
-            className={`inline-flex items-center justify-center font-bold px-1.5 py-0.5 rounded text-[10px] mx-0.5 select-none ${
-              isUser 
-                ? 'bg-white/20 text-white' 
-                : 'bg-blue-600/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border border-blue-600/10 dark:border-blue-500/20'
-            }`}
-            title={`Source ${sourceNum}`}
+          <span key={subIdx}
+            className="inline-flex items-center justify-center font-bold px-1.5 py-0.5 rounded-[4px] text-[9px] mx-0.5 font-mono"
+            style={{
+              background: isUser ? "rgba(255,255,255,0.15)" : "rgba(59,130,246,0.15)",
+              border: isUser ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(59,130,246,0.25)",
+              color: isUser ? "#fff" : "#60a5fa",
+            }}
+            title={`Source ${subPart}`}
           >
-            Source {sourceNum}
+            [{subPart}]
           </span>
-        );
+        )
       }
-      return subPart;
-    });
-
+      return subPart
+    })
     if (isBold) {
-      return <strong key={index} className={`font-semibold ${isUser ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`}>{renderedSubparts}</strong>;
+      return <strong key={index} className={`font-semibold ${isUser ? "text-white" : "text-blue-300"}`}>{renderedSubparts}</strong>
     }
-    return renderedSubparts;
-  });
+    return renderedSubparts
+  })
 }
 
 function extractAnswerText(content: string): string {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith('{')) {
-    return content;
-  }
-  
-  // Try to find the start of the answer string.
-  // It usually matches something like `"answer"\s*:\s*"`
-  const answerKeyIndex = trimmed.indexOf('"answer"');
-  if (answerKeyIndex === -1) {
-    return ""; // Still streaming the key
-  }
-  
-  // Find the colon after the key
-  const colonIndex = trimmed.indexOf(':', answerKeyIndex + 8);
-  if (colonIndex === -1) {
-    return "";
-  }
-  
-  // Find the first quote after the colon
-  const quoteIndex = trimmed.indexOf('"', colonIndex + 1);
-  if (quoteIndex === -1) {
-    return "";
-  }
-  
-  // The content starts from quoteIndex + 1
-  const startIndex = quoteIndex + 1;
-  
-  // Extract characters up to the end of the string, handling escapes
-  let result = "";
-  let isEscaped = false;
-  
-  for (let i = startIndex; i < trimmed.length; i++) {
-    const char = trimmed[i];
+  const trimmed = content.trim()
+  if (!trimmed.startsWith("{")) return content
+  const answerKeyIndex = trimmed.indexOf('"answer"')
+  if (answerKeyIndex === -1) return ""
+  const colonIndex = trimmed.indexOf(":", answerKeyIndex + 8)
+  if (colonIndex === -1) return ""
+  const quoteIndex = trimmed.indexOf('"', colonIndex + 1)
+  if (quoteIndex === -1) return ""
+  let result = ""
+  let isEscaped = false
+  for (let i = quoteIndex + 1; i < trimmed.length; i++) {
+    const char = trimmed[i]
     if (isEscaped) {
-      if (char === 'n') result += '\n';
-      else if (char === 't') result += '\t';
-      else if (char === 'r') result += '\r';
-      else result += char;
-      isEscaped = false;
-    } else if (char === '\\') {
-      isEscaped = true;
+      if (char === "n") result += "\n"
+      else if (char === "t") result += "\t"
+      else result += char
+      isEscaped = false
+    } else if (char === "\\") {
+      isEscaped = true
     } else if (char === '"') {
-      // We found the closing quote of the answer string!
-      break;
+      break
     } else {
-      result += char;
+      result += char
     }
   }
-  
-  return result;
+  return result
 }
 
-function renderFormattedContent(content: string, isUser: boolean) {
-  const cleanContent = isUser ? content : extractAnswerText(content);
-  
-  let confidence: string | null = null;
-  const confidenceMatch = cleanContent.match(/\[Confidence:\s*(\w+)\]/i);
-  let textToProcess = cleanContent;
-  if (confidenceMatch) {
-    confidence = confidenceMatch[1];
-    textToProcess = cleanContent.replace(/\[Confidence:\s*(\w+)\]/i, "").trim();
+function renderContent(content: string, isUser: boolean, isStreaming?: boolean) {
+  const cleanContent = isUser ? content : extractAnswerText(content)
+  let confidence: string | null = null
+  const confMatch = cleanContent.match(/\[Confidence:\s*(\w+)\]/i)
+  let textToProcess = cleanContent
+  if (confMatch) {
+    confidence = confMatch[1]
+    textToProcess = cleanContent.replace(/\[Confidence:\s*(\w+)\]/i, "").trim()
   }
 
-  const lines = textToProcess.split("\n");
-  const parsedLines = lines.flatMap((line, idx) => {
-    if (!line.trim()) return [<div key={`space-${idx}`} className="h-1.5" />];
-    
-    if (line.startsWith("### ")) {
-      return [<h4 key={`h3-${idx}`} className="text-sm font-bold mt-2.5 mb-1">{parseCitationsAndStyles(line.slice(4), isUser)}</h4>];
-    }
-    if (line.startsWith("## ")) {
-      return [<h3 key={`h2-${idx}`} className="text-base font-bold mt-3 mb-1.5">{parseCitationsAndStyles(line.slice(3), isUser)}</h3>];
-    }
-    
+  const lines = textToProcess.split("\n")
+  const parsed = lines.flatMap((line, idx) => {
+    if (!line.trim()) return [<div key={`sp-${idx}`} className="h-1" />]
+    if (line.startsWith("### ")) return [<h4 key={`h3-${idx}`} className="text-xs font-bold mt-2 mb-0.5 text-slate-300">{parseCitationsAndStyles(line.slice(4), isUser)}</h4>]
+    if (line.startsWith("## ")) return [<h3 key={`h2-${idx}`} className="text-sm font-bold mt-2.5 mb-1 text-slate-200">{parseCitationsAndStyles(line.slice(3), isUser)}</h3>]
     if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-      const cleanLine = line.trim().slice(2);
-      return [
-        <ul key={`ul-${idx}`} className="list-disc pl-5 my-0.5 opacity-95">
-          <li className="text-sm">{parseCitationsAndStyles(cleanLine, isUser)}</li>
-        </ul>
-      ];
+      return [<ul key={`ul-${idx}`} className="list-disc pl-4 my-0.5"><li className="text-[12px] leading-relaxed">{parseCitationsAndStyles(line.trim().slice(2), isUser)}</li></ul>]
     }
-
-    const sentences = line.split(/(?<=[.!?])\s+(?=[A-Z])/);
-    const paragraphs: string[] = [];
-    let currentParagraph = "";
-    
-    sentences.forEach((sentence) => {
-      const startsWithTransition = /^(however|overall|the conflict|according to|moreover|furthermore|in addition)/i.test(sentence);
-      
-      if (startsWithTransition && currentParagraph) {
-        paragraphs.push(currentParagraph.trim());
-        currentParagraph = sentence + " ";
-      } else {
-        currentParagraph += sentence + " ";
-        if (currentParagraph.split(/(?<=[.!?])\s+/).length > 3) {
-          paragraphs.push(currentParagraph.trim());
-          currentParagraph = "";
-        }
-      }
-    });
-    if (currentParagraph.trim()) {
-      paragraphs.push(currentParagraph.trim());
-    }
-
-    return paragraphs.map((paraText, pIdx) => (
-      <p key={`p-${idx}-${pIdx}`} className="text-sm leading-relaxed my-1.5 opacity-95">
-        {parseCitationsAndStyles(paraText, isUser)}
-      </p>
-    ));
-  });
+    return [<p key={`p-${idx}`} className="text-[12px] leading-relaxed my-1">{parseCitationsAndStyles(line, isUser)}</p>]
+  })
 
   return (
-    <div className="space-y-2">
-      {parsedLines}
+    <div className="space-y-0.5">
+      {parsed}
+      {isStreaming && <span className="typewriter-cursor" />}
       {confidence && (
         <div className="pt-2 flex justify-end">
-          <Badge className={`text-[10px] py-0.5 px-2 border font-semibold select-none ${
-            confidence.toLowerCase() === 'high' 
-              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-              : confidence.toLowerCase() === 'medium'
-                ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                : 'bg-red-500/10 text-red-500 border-red-500/20'
-          }`}>
-            Confidence: {confidence}
-          </Badge>
+          <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full border
+            ${confidence.toLowerCase() === "high" ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
+              : confidence.toLowerCase() === "medium" ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
+              : "text-red-400 bg-red-400/10 border-red-400/20"}`}>
+            CONFIDENCE: {confidence.toUpperCase()}
+          </span>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 export function AIAnalystChat() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: "init", role: "assistant", content: "Hello. I am your Geopolitical AI Analyst. How can I assist you with strategic intelligence today?" }
+    {
+      id: "init",
+      role: "assistant",
+      content: "Hello. I am your Geopolitical AI Analyst — powered by Llama 3.3 70B with hybrid RAG retrieval over your indexed intelligence corpus. Ask me anything about current events, entities, risk assessments, or geopolitical dynamics."
+    }
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isLoading])
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return
+  const sendMessage = async (text?: string) => {
+    const msg = text || input
+    if (!msg.trim() || isLoading) return
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: input }
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: msg }
     setMessages(prev => [...prev, userMsg])
     setInput("")
     setIsLoading(true)
@@ -208,24 +149,20 @@ export function AIAnalystChat() {
       const response = await fetch(`${API_BASE_URL}/api/v2/analyst/query_stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userMsg.content })
+        body: JSON.stringify({ question: msg })
       })
-
       if (!response.body) throw new Error("No body")
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      
       let doneReading = false
       let currentContent = ""
 
       while (!doneReading) {
         const { done, value } = await reader.read()
         if (done) break
-
         const chunk = decoder.decode(value, { stream: true })
         const lines = chunk.split("\n").filter(l => l.startsWith("data: "))
-
         for (const line of lines) {
           const data = JSON.parse(line.slice(6))
           if (data.type === "token") {
@@ -235,86 +172,139 @@ export function AIAnalystChat() {
             setMessages(prev => prev.map(m => m.id === asstId ? { ...m, sources: data.sources } : m))
             doneReading = true
           } else if (data.type === "error") {
-            console.error("Stream error:", data.content)
-            setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: currentContent + "\n\n[Error encountered during generation]" } : m))
+            setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: currentContent + "\n\n[Error during generation]" } : m))
             doneReading = true
           }
         }
       }
-    } catch (e) {
-      console.error("Chat error:", e)
-    } finally {
-      setIsLoading(false)
-    }
+    } catch {}
+    finally { setIsLoading(false) }
   }
 
-  return (
-    <Card className="h-full flex flex-col shadow-sm border-border">
-      <CardHeader className="py-4 border-b">
-        <CardTitle className="flex items-center text-lg">
-          <Bot className="mr-2 h-5 w-5 text-blue-600" />
-          AI Analyst
-        </CardTitle>
-      </CardHeader>
-      
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        <div className="space-y-4">
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-lg p-3 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'}`}>
-                <div className="flex items-center mb-1.5 text-xs opacity-75">
-                  {msg.role === 'user' ? <User className="h-3 w-3 mr-1" /> : <Bot className="h-3 w-3 mr-1 text-blue-600 dark:text-blue-400" />}
-                  <span className="font-semibold">{msg.role === 'user' ? 'You' : 'Analyst'}</span>
-                </div>
-                
-                <div className="space-y-1">
-                  {renderFormattedContent(msg.content, msg.role === 'user')}
-                </div>
-                
-                {msg.role === 'assistant' && msg.content === "" && isLoading && (
-                  <div className="flex space-x-1 mt-2">
-                    <div className="h-2 w-2 bg-slate-400 rounded-full animate-bounce"></div>
-                    <div className="h-2 w-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
-                    <div className="h-2 w-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
-                  </div>
-                )}
+  const showSuggestions = messages.length <= 1
 
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 pt-2 border-t border-slate-300 dark:border-slate-700">
-                    <p className="text-xs font-semibold mb-1">Sources Citations:</p>
-                    <ul className="text-xs space-y-1">
-                      {msg.sources.map((s, idx) => (
-                        <li key={idx} className="flex items-start">
-                          <ExternalLink className="h-3 w-3 mr-1 mt-0.5 shrink-0" />
-                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="hover:underline line-clamp-1">
-                            {s.title}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
+  return (
+    <div className="intel-card flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="shrink-0 px-4 py-3 border-b border-white/[0.05] flex items-center gap-3">
+        <div className="relative">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-700/30">
+            <Bot className="w-4 h-4 text-white" />
+          </div>
+          {isLoading && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-400 live-dot ring-1 ring-[#04040e]" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-bold text-slate-200" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            AI Analyst
+          </p>
+          <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
+            {isLoading ? "Analyzing..." : "Ready · Llama 3.3 70b"}
+          </p>
+        </div>
+        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-mono font-bold uppercase
+          ${isLoading ? "text-blue-400 bg-blue-400/10 border border-blue-400/20" : "text-emerald-400 bg-emerald-400/10 border border-emerald-400/20"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? "bg-blue-400 live-dot" : "bg-emerald-400"}`} />
+          {isLoading ? "Processing" : "Online"}
         </div>
       </div>
 
-      <CardFooter className="p-3 border-t bg-slate-50 dark:bg-slate-900 rounded-b-xl">
-        <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex w-full space-x-2">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+        {messages.map((msg, idx) => (
+          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} fade-up`}>
+            {msg.role === "assistant" && (
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600/30 to-indigo-700/30 border border-blue-500/20 flex items-center justify-center shrink-0 mr-2.5 mt-1">
+                <Bot className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+            )}
+            <div className={`max-w-[86%] rounded-xl px-3.5 py-3
+              ${msg.role === "user" ? "terminal-msg-user" : "terminal-msg-ai"}`}>
+              <div className={`text-[9px] font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1
+                ${msg.role === "user" ? "text-blue-300/70" : "text-slate-600"}`}>
+                {msg.role === "user" ? <User className="w-2.5 h-2.5" /> : <Bot className="w-2.5 h-2.5" />}
+                {msg.role === "user" ? "You" : "Analyst"}
+              </div>
+
+              <div className={msg.role === "user" ? "text-slate-100" : "text-slate-300"}>
+                {msg.content === "" && isLoading && idx === messages.length - 1 ? (
+                  <div className="flex gap-1 mt-1">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-400/60 animate-bounce"
+                        style={{ animationDelay: `${i * 0.12}s` }} />
+                    ))}
+                  </div>
+                ) : (
+                  renderContent(msg.content, msg.role === "user",
+                    isLoading && idx === messages.length - 1 && msg.role === "assistant")
+                )}
+              </div>
+
+              {msg.sources && msg.sources.length > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-white/[0.07]">
+                  <p className="text-[8px] font-mono text-slate-600 uppercase tracking-wider mb-1.5">Sources</p>
+                  <div className="space-y-1">
+                    {msg.sources.map((s, i) => (
+                      <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-start gap-1.5 text-[10px] text-blue-400/80 hover:text-blue-300 transition-colors group">
+                        <ExternalLink className="w-2.5 h-2.5 mt-0.5 shrink-0 group-hover:text-blue-400" />
+                        <span className="line-clamp-1">{s.title}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {msg.role === "user" && (
+              <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/[0.1] flex items-center justify-center shrink-0 ml-2.5 mt-1">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Suggested queries */}
+        {showSuggestions && (
+          <div className="space-y-2 fade-up fade-up-delay-2">
+            <p className="text-[9px] font-mono text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3" /> Suggested Queries
+            </p>
+            <div className="grid grid-cols-1 gap-1.5">
+              {SUGGESTED.map((q, i) => (
+                <button key={i} onClick={() => sendMessage(q)}
+                  className="text-left text-[11px] text-slate-500 hover:text-slate-300 px-3 py-2 rounded-lg
+                    bg-white/[0.02] border border-white/[0.05] hover:border-blue-500/20 hover:bg-blue-500/[0.04] transition-all">
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0 p-3 border-t border-white/[0.05]" style={{ background: "rgba(4,4,14,0.8)" }}>
+        <form onSubmit={(e) => { e.preventDefault(); sendMessage() }} className="flex gap-2">
           <input
-            className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="Ask a strategic question..."
+            ref={inputRef}
+            className="flex-1 bg-white/[0.03] border border-white/[0.07] rounded-xl px-3.5 py-2.5 text-[12px] text-slate-200
+              placeholder-slate-600 focus:outline-none focus:border-blue-500/40 focus:bg-blue-500/[0.03] transition-all"
+            placeholder="Ask about geopolitical events, risks, entities..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
+          <button type="submit" disabled={isLoading || !input.trim()}
+            className="px-3 py-2.5 rounded-xl text-white font-semibold transition-all flex items-center gap-1.5
+              bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500
+              disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-700/20">
+            <Send className="w-3.5 h-3.5" />
+          </button>
         </form>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   )
 }

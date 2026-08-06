@@ -1,10 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { API_BASE_URL } from "@/lib/api"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Layers, Globe, RefreshCw, Sparkles, CheckCircle, XCircle } from "lucide-react"
+import { Activity, RefreshCw, Sparkles, CheckCircle, XCircle, Globe, Clock, ChevronRight } from "lucide-react"
 
 interface EventItem {
   id: string
@@ -17,40 +14,53 @@ interface EventItem {
   last_updated: string
 }
 
+const RISK_STYLES: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  Critical: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.25)", text: "#f87171", dot: "#ef4444" },
+  High:     { bg: "rgba(249,115,22,0.08)", border: "rgba(249,115,22,0.25)", text: "#fb923c", dot: "#f97316" },
+  Medium:   { bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.25)", text: "#fbbf24", dot: "#f59e0b" },
+  Low:      { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)", text: "#34d399", dot: "#10b981" },
+}
+
+const STATUS_STYLES: Record<string, { label: string; color: string }> = {
+  escalating:     { label: "ESCALATING",    color: "#f87171" },
+  "de-escalating":{ label: "DE-ESCALATING", color: "#34d399" },
+  resolved:       { label: "RESOLVED",      color: "#60a5fa" },
+  ongoing:        { label: "ONGOING",        color: "#fbbf24" },
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<EventItem | null>(null)
   const [generatingId, setGeneratingId] = useState<string | null>(null)
-  const [forecastMessage, setForecastMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const fetchEvents = async () => {
     setLoading(true)
-    setErrorMessage(null)
+    setErrorMsg(null)
     try {
       const res = await fetch(`${API_BASE_URL}/api/v2/events`)
       if (res.ok) {
         const data = await res.json()
         setEvents(data)
+        if (data.length > 0) setSelected(data[0])
       } else {
-        setErrorMessage("Failed to load events from the API.")
+        setErrorMsg("Failed to load events.")
       }
-    } catch (e) {
-      console.error("Error fetching events", e)
-      setErrorMessage("Could not connect to the backend API.")
+    } catch {
+      setErrorMsg("Could not connect to backend.")
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchEvents()
-  }, [])
+  useEffect(() => { fetchEvents() }, [])
 
-  const handleGenerateForecast = async (eventId: string) => {
+  const handleForecast = async (eventId: string) => {
     setGeneratingId(eventId)
-    setForecastMessage(null)
-    setErrorMessage(null)
+    setSuccessMsg(null)
+    setErrorMsg(null)
     try {
       const res = await fetch(`${API_BASE_URL}/api/v2/forecasts/generate`, {
         method: "POST",
@@ -59,164 +69,199 @@ export default function EventsPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setForecastMessage(`Forecast generated successfully: "${data.prediction || 'Ceasefire negotiated'}"`)
-        // Scroll to top to show message
-        window.scrollTo({ top: 0, behavior: "smooth" })
+        setSuccessMsg(`Forecast generated: "${data.prediction?.slice(0, 80) || "Analysis complete"}"`)
       } else {
-        const errData = await res.json()
-        setErrorMessage(`Forecasting failed: ${errData.detail || "Server error"}`)
+        const err = await res.json()
+        setErrorMsg(`Forecast failed: ${err.detail || "Server error"}`)
       }
-    } catch (e) {
-      console.error("Error generating forecast", e)
-      setErrorMessage("Network error during forecast generation.")
+    } catch {
+      setErrorMsg("Network error during forecast generation.")
     } finally {
       setGeneratingId(null)
     }
   }
 
-  const getRiskBadge = (level: string) => {
-    const l = level.toLowerCase()
-    if (l === "critical") return "bg-red-500/10 text-red-500 border border-red-500/20"
-    if (l === "high") return "bg-orange-500/10 text-orange-500 border border-orange-500/20"
-    if (l === "medium") return "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
-    return "bg-green-500/10 text-green-500 border border-green-500/20"
-  }
-
-  const getStatusBadge = (status: string) => {
-    const s = status.toLowerCase()
-    if (s === "escalating") return "bg-red-500/20 text-red-400"
-    if (s === "de-escalating") return "bg-green-500/20 text-green-400"
-    if (s === "resolved") return "bg-blue-500/20 text-blue-400"
-    return "bg-slate-500/20 text-slate-400"
-  }
+  const rs = (ev: EventItem) => RISK_STYLES[ev.risk_level] || RISK_STYLES.Medium
+  const ss = (ev: EventItem) => STATUS_STYLES[ev.status?.toLowerCase()] || { label: ev.status?.toUpperCase(), color: "#64748b" }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 px-4 py-6">
-      <div className="flex justify-between items-center">
+    <div className="max-w-[1400px] mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between fade-up">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-            <Layers className="text-blue-500 h-8 w-8" /> Geopolitical Event Clusters
+          <p className="page-header-tag mb-1">// EVENTS — GEOPOLITICAL CLUSTERS</p>
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Active Event Clusters
           </h1>
-          <p className="text-slate-400 mt-1">Automatic discovery of events using HDBSCAN embedding density</p>
+          <p className="text-sm text-slate-600 mt-1">HDBSCAN embedding-density cluster detection</p>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="border-slate-800 text-slate-300 hover:text-white" 
-          onClick={fetchEvents}
-          disabled={loading}
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        <button onClick={fetchEvents} disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium text-slate-400 hover:text-slate-200 bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.1] transition-all">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
-        </Button>
+        </button>
       </div>
 
-      {forecastMessage && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-sm flex items-start gap-3">
-          <CheckCircle className="h-5 w-5 shrink-0 mt-0.5" />
+      {/* Alerts */}
+      {successMsg && (
+        <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 fade-up">
+          <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold text-white">Success</p>
-            <p>{forecastMessage}</p>
-            <a href="/forecast" className="text-blue-400 hover:underline font-medium inline-block mt-2">Go to Forecasting Dashboard &rarr;</a>
+            <p className="text-[12px] font-semibold text-emerald-300">Forecast Generated</p>
+            <p className="text-[11px] text-emerald-500 mt-0.5">{successMsg}</p>
+            <a href="/forecast" className="text-[11px] text-blue-400 hover:underline mt-1 inline-block">
+              View Forecasting Dashboard →
+            </a>
           </div>
         </div>
       )}
-
-      {errorMessage && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-start gap-3">
-          <XCircle className="h-5 w-5 shrink-0 mt-0.5" />
+      {errorMsg && (
+        <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-500/[0.06] border border-red-500/20 fade-up">
+          <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold text-white">Attention Needed</p>
-            <p>{errorMessage}</p>
+            <p className="text-[12px] font-semibold text-red-300">Error</p>
+            <p className="text-[11px] text-red-500 mt-0.5">{errorMsg}</p>
           </div>
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-20 text-slate-400">
-          <RefreshCw className="animate-spin h-8 w-8 mx-auto text-blue-500 mb-4" />
-          Loading active events...
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-xl" />)}
+          </div>
+          <div className="md:col-span-2 skeleton h-80 rounded-xl" />
         </div>
       ) : events.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-xl text-slate-400">
-          <Globe className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-          <p className="text-lg font-medium text-slate-200">No active events found</p>
-          <p className="text-sm mt-1 max-w-sm mx-auto">Ingest more articles and run clustering to discover events dynamically.</p>
+        <div className="intel-card p-16 text-center">
+          <Globe className="w-10 h-10 mx-auto text-slate-700 mb-3" />
+          <p className="text-slate-400 font-medium">No active events found</p>
+          <p className="text-slate-600 text-sm mt-1">Ingest more articles and run clustering to discover events.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {events.map((event) => (
-            <Card key={event.id} className="border-slate-800 bg-slate-950/50 backdrop-blur-md hover:border-slate-700 transition duration-300">
-              <CardHeader className="space-y-1">
-                <div className="flex justify-between items-start gap-2">
-                  <Badge className={`${getRiskBadge(event.risk_level)} font-medium`}>
-                    {event.risk_level} Risk
-                  </Badge>
-                  <Badge variant="secondary" className={`${getStatusBadge(event.status)} font-medium capitalize`}>
-                    {event.status}
-                  </Badge>
-                </div>
-                <CardTitle className="text-xl font-bold text-white leading-snug mt-2">
-                  {event.title}
-                </CardTitle>
-                <CardDescription className="text-xs text-slate-500 mt-1">
-                  Last Updated: {new Date(event.last_updated).toLocaleString()}
-                </CardDescription>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  {event.description}
-                </p>
-
-                {event.affected_regions && event.affected_regions.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Affected Regions</p>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {event.affected_regions.map((region, idx) => (
-                        <Badge key={idx} variant="outline" className="border-slate-800 text-slate-400 text-[11px] py-0">
-                          {region}
-                        </Badge>
-                      ))}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Event timeline list */}
+          <div className="space-y-2 fade-up fade-up-delay-1">
+            <p className="text-[9px] font-mono text-slate-700 uppercase tracking-[0.12em] px-1">
+              {events.length} Events
+            </p>
+            {events.map((event, i) => {
+              const r = rs(event)
+              const s = ss(event)
+              const isSelected = selected?.id === event.id
+              return (
+                <button key={event.id}
+                  onClick={() => setSelected(event)}
+                  className={`w-full text-left p-3 rounded-xl border transition-all
+                    ${isSelected
+                      ? "border-blue-500/30 bg-blue-500/[0.07]"
+                      : "border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.08]"}`}
+                  style={{ animationDelay: `${i * 0.04}s` }}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-1 w-2 h-2 rounded-full shrink-0 ring-2 ring-[#050508]"
+                      style={{ background: r.dot }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-slate-200 leading-snug line-clamp-2"
+                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                        {event.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[9px] font-mono font-bold" style={{ color: s.color }}>
+                          {s.label}
+                        </span>
+                        <span className="text-[9px] text-slate-700">·</span>
+                        <span className="text-[9px] font-mono" style={{ color: r.text }}>{event.risk_level}</span>
+                      </div>
                     </div>
+                    {isSelected && <ChevronRight className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />}
                   </div>
-                )}
+                </button>
+              )
+            })}
+          </div>
 
-                {event.involved_entity_ids && event.involved_entity_ids.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Involved Entities</p>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {event.involved_entity_ids.map((entity, idx) => (
-                        <Badge key={idx} variant="secondary" className="bg-slate-900 text-slate-300 text-[11px] py-0 border border-slate-800">
-                          {entity}
-                        </Badge>
-                      ))}
-                    </div>
+          {/* Event detail panel */}
+          {selected && (() => {
+            const r = rs(selected)
+            const s = ss(selected)
+            return (
+              <div className="lg:col-span-2 intel-card p-5 space-y-4 fade-up fade-up-delay-2"
+                style={{ borderColor: r.border, background: r.bg }}>
+                {/* Title + badges */}
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full border"
+                      style={{ color: r.text, borderColor: r.border, background: r.bg }}>
+                      {selected.risk_level.toUpperCase()} RISK
+                    </span>
+                    <span className="text-[9px] font-mono font-bold" style={{ color: s.color }}>
+                      ● {s.label}
+                    </span>
                   </div>
-                )}
-
-                <div className="pt-2">
-                  <Button
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium"
-                    onClick={() => handleGenerateForecast(event.id)}
-                    disabled={generatingId === event.id}
-                  >
-                    {generatingId === event.id ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Generating Predictive Model...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Generate Intelligence Forecast
-                      </>
-                    )}
-                  </Button>
+                  <h2 className="text-xl font-bold text-slate-100 leading-snug"
+                    style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                    {selected.title}
+                  </h2>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <Clock className="w-3 h-3 text-slate-600" />
+                    <span className="text-[10px] font-mono text-slate-600">
+                      Last updated: {new Date(selected.last_updated).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                <div className="h-px bg-white/[0.05]" />
+
+                {/* Description */}
+                <p className="text-[13px] text-slate-400 leading-relaxed">{selected.description}</p>
+
+                {/* Regions + entities */}
+                <div className="grid grid-cols-2 gap-4">
+                  {selected.affected_regions && selected.affected_regions.length > 0 && (
+                    <div>
+                      <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider mb-2">Affected Regions</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selected.affected_regions.map(r => (
+                          <span key={r} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full text-slate-400 bg-white/[0.03] border border-white/[0.06]">
+                            <Globe className="w-2.5 h-2.5" />{r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selected.involved_entity_ids && selected.involved_entity_ids.length > 0 && (
+                    <div>
+                      <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider mb-2">Involved Entities</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selected.involved_entity_ids.slice(0, 8).map((e, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full text-slate-400 bg-blue-500/[0.08] border border-blue-500/[0.15]">
+                            {e}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="h-px bg-white/[0.05]" />
+
+                {/* Generate forecast */}
+                <button
+                  onClick={() => handleForecast(selected.id)}
+                  disabled={generatingId === selected.id}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all
+                    bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500
+                    disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 hover:shadow-blue-600/30"
+                >
+                  {generatingId === selected.id ? (
+                    <><RefreshCw className="w-4 h-4 animate-spin" /> Generating Predictive Model...</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4" /> Generate Intelligence Forecast</>
+                  )}
+                </button>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>
