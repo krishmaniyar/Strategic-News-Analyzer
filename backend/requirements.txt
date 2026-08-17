@@ -1,18 +1,49 @@
-fastapi
-uvicorn
-sqlalchemy[asyncio]
-asyncpg
-pydantic
-pydantic-settings
-python-dotenv
-httpx
-groq
-langdetect
-beautifulsoup4
-celery
-redis
-structlog
-scikit-learn
-numpy
-pandas
-websockets
+# Strategic News Analyzer — Backend Dependencies
+# v3-native-backend: Celery and Redis removed. APScheduler handles scheduled ingestion.
+# All versions pinned exactly. This is the only guard against dev/VM drift
+# without container isolation. Do NOT loosen to ranges.
+#
+# To update: pip install -U <package> then re-run pip freeze and update here.
+
+# Web framework
+fastapi==0.115.14
+uvicorn[standard]==0.35.0
+
+# Database (async PostgreSQL — Supabase)
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+
+# Settings & validation
+pydantic==2.11.7
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
+
+# HTTP client
+httpx==0.28.1
+
+# AI / LLM
+groq==0.30.0
+langdetect==1.0.9
+
+# HTML parsing (RSS content)
+beautifulsoup4==4.13.4
+
+# In-process scheduler (replaces Celery + Redis)
+APScheduler==3.11.3
+tzlocal==5.4.4
+pytz==2025.2
+
+# Logging
+structlog==25.4.0
+
+# ML / Embeddings
+scikit-learn==1.7.1
+numpy==2.3.1
+pandas==2.3.1
+
+# WebSocket support
+websockets==14.2
+
+# Observability
+prometheus-fastapi-instrumentator==7.1.0
+prometheus-client==0.22.1

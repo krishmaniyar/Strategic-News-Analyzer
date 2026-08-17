@@ -1,4 +1,6 @@
+import asyncio
 from datetime import datetime
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -14,10 +16,17 @@ from app.ingestion.deduplicator import compute_hash
 
 logger = get_logger(__name__)
 
+
 class IngestionCoordinator:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, main_loop: Optional[asyncio.AbstractEventLoop] = None):
         self.db = db
         self.repo = ArticleRepository(db)
+        # main_loop is the FastAPI event loop — used for thread-safe WebSocket broadcasts.
+        # The ingestion job runs in APScheduler's background thread with its own event loop.
+        # Without this reference, broadcast_article() called from the background thread
+        # would fail (different event loop). asyncio.run_coroutine_threadsafe() posts the
+        # coroutine back to the correct loop.
+        self.main_loop = main_loop
 
         # Instantiate adapters with config keys
         self.adapters = [
@@ -28,7 +37,7 @@ class IngestionCoordinator:
             GDELTAdapter()
         ]
 
-    async def ingest_source(self, adapter) -> dict:
+    async def ingest_source(self, adapter, embed_enabled: bool = True) -> dict:
         """Fetch, deduplicate, and ingest articles from a single adapter."""
         source_id = adapter.source_id()
         logger.info("ingestion_start_source", source=source_id)
@@ -66,7 +75,6 @@ class IngestionCoordinator:
 
                 if article:
                     stats["inserted"] += 1
-                    # Trigger AI Core processing pipeline in-line
                     try:
                         from app.agents.analysis_agent import analyze_article
                         from app.agents.embedding_agent import embed_article
@@ -75,9 +83,12 @@ class IngestionCoordinator:
 
                         logger.info("ai_pipeline_processing_start", article_id=article.id)
                         analysis_res = await analyze_article(article, self.repo)
-                        await embed_article(article, self.repo)
 
-                        # Phase 3: Entity extraction and KG upsert
+                        # Only embed if Ollama is healthy (checked once before the run starts)
+                        if embed_enabled:
+                            await embed_article(article, self.repo)
+
+                        # Entity extraction and knowledge graph upsert
                         entity_result = await extract_entities(str(article.id), article.content_raw)
                         if entity_result and entity_result.get("entities"):
                             entity_id_map = {}
@@ -98,7 +109,8 @@ class IngestionCoordinator:
                                         str(article.id)
                                     )
 
-                        # Broadcast via WebSocket
+                        # Broadcast via WebSocket — must post to the main FastAPI event loop,
+                        # NOT await here (we're in the background ingestion thread's event loop).
                         try:
                             from app.api.feed import manager
                             article_data = {
@@ -109,7 +121,12 @@ class IngestionCoordinator:
                                 "published_at": str(article.published_at),
                                 "risk_level": (analysis_res or {}).get("risk_level", "Medium")
                             }
-                            await manager.broadcast_article(article_data)
+                            if self.main_loop and not self.main_loop.is_closed():
+                                # Thread-safe: submit coroutine to the main event loop from this thread
+                                asyncio.run_coroutine_threadsafe(
+                                    manager.broadcast_article(article_data),
+                                    self.main_loop
+                                )
                         except Exception as ws_err:
                             logger.error("ws_broadcast_failed", error=str(ws_err))
 
@@ -135,8 +152,18 @@ class IngestionCoordinator:
 
     async def run_pipeline(self) -> dict:
         """Run ingestion pipeline across all configured adapters."""
+        from app.ai.ollama_client import ollama_client
+
         logger.info("ingestion_pipeline_run_start")
         start_time = datetime.utcnow()
+
+        # Check Ollama availability once before processing any articles.
+        # If Ollama is down, we skip embeddings for the entire run but continue
+        # with analysis, entity extraction, etc. — ingestion is not blocked.
+        embed_enabled = await ollama_client.health_check()
+        if not embed_enabled:
+            logger.warning("ollama_unavailable_skipping_embeddings",
+                           reason="Ollama health check failed — embeddings will be skipped for this run")
 
         overall_stats = {
             "sources": {},
@@ -144,23 +171,21 @@ class IngestionCoordinator:
             "total_inserted": 0,
             "total_duplicates": 0,
             "total_errors": 0,
-            "duration_seconds": 0.0
+            "duration_seconds": 0.0,
+            "embeddings_enabled": embed_enabled
         }
 
         for adapter in self.adapters:
             source_id = adapter.source_id()
-            stats = await self.ingest_source(adapter)
+            stats = await self.ingest_source(adapter, embed_enabled=embed_enabled)
 
-            # Record individual source stats
             overall_stats["sources"][source_id] = stats
-
-            # Aggregate stats
             overall_stats["total_fetched"] += stats["fetched"]
             overall_stats["total_inserted"] += stats["inserted"]
             overall_stats["total_duplicates"] += stats["duplicates"]
             overall_stats["total_errors"] += stats["errors"]
 
-        # Commit all transactions
+        # Final commit
         try:
             await self.db.commit()
             logger.info("ingestion_pipeline_db_commit")

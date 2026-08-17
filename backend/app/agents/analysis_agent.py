@@ -170,24 +170,4 @@ async def _analyze_strategic_score(summary: str, sentiment_label: str, text_cont
         logger.error("strategic_scoring_failed", error=str(e))
         return {}
 
-# Celery wrapper
-from app.core.celery_app import celery_app  # noqa: E402
-from app.core.database import SessionLocal  # noqa: E402
 
-@celery_app.task(name="agents.analyze_article")
-def analyze_article_task(article_id: str):
-    import asyncio
-    async def _run():
-        from app.db.repositories.article_repo import ArticleRepository
-        from app.db.models import Article
-        from sqlalchemy import select
-
-        async with SessionLocal() as db:
-            repo = ArticleRepository(db)
-            stmt = select(Article).where(Article.id == article_id)
-            res = await db.execute(stmt)
-            article = res.scalar_one_or_none()
-            if article:
-                await analyze_article(article, repo)
-                await db.commit()
-    asyncio.run(_run())

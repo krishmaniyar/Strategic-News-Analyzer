@@ -1,60 +1,90 @@
-import asyncio
 import json
-import redis.asyncio as aioredis
+import threading
+from datetime import date, datetime
 from groq import AsyncGroq
+import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class GroqClient:
     """Wrapper around Groq API with:
-    - Daily token budget tracking (Redis counter with in-memory fallback)
+    - Daily token budget tracking (thread-safe in-memory counter, flushed to Postgres)
     - Structured JSON output parsing
     - Automatic retry on rate limit (429)
+    - Explicit 30s timeout (SDK default is ~600s which can hang the ingestion thread)
     """
 
     def __init__(self):
-        self._client = AsyncGroq(api_key=settings.groq_api_key)
-        self._redis = None
-        self._redis_offline = False
-        self._in_memory_tokens = 0
+        self._client = AsyncGroq(
+            api_key=settings.groq_api_key,
+            http_client=httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+        )
+        # Thread-safe in-memory counter. A single process needs no Redis for this.
+        self._token_lock = threading.Lock()
+        self._in_memory_tokens: int = 0
+        self._token_date: date = date.today()
 
-    async def _get_redis(self) -> aioredis.Redis:
-        if not self._redis:
-            self._redis = aioredis.from_url(
-                settings.redis_url,
-                decode_responses=True,
-                socket_connect_timeout=0.5,
-                socket_timeout=0.5
+    def _check_budget(self, estimated_tokens: int = 500) -> bool:
+        """Return False if daily budget is exceeded. Thread-safe."""
+        with self._token_lock:
+            # Midnight reset — if the date has changed, start fresh
+            if date.today() != self._token_date:
+                self._in_memory_tokens = 0
+                self._token_date = date.today()
+            return (self._in_memory_tokens + estimated_tokens) <= settings.groq_daily_token_budget
+
+    def _increment_budget(self, tokens: int) -> None:
+        """Record token consumption. Thread-safe."""
+        with self._token_lock:
+            self._in_memory_tokens += tokens
+
+    def get_today_usage(self) -> int:
+        """Return today's token count (for metrics/logging)."""
+        with self._token_lock:
+            return self._in_memory_tokens
+
+    async def restore_budget_from_db(self, db) -> None:
+        """On startup: restore today's token total from the token_usage_log table.
+        Prevents over-spending if the process restarts mid-day.
+        """
+        try:
+            from sqlalchemy import text
+            today = date.today()
+            result = await db.execute(
+                text("SELECT COALESCE(SUM(tokens_used), 0) FROM token_usage_log WHERE run_date = :today"),
+                {"today": today}
             )
-        return self._redis
+            row = result.fetchone()
+            restored = int(row[0]) if row else 0
+            with self._token_lock:
+                self._in_memory_tokens = restored
+                self._token_date = today
+            logger.info("groq_budget_restored", tokens_used_today=restored, date=str(today))
+        except Exception as e:
+            logger.warning("groq_budget_restore_failed", error=str(e))
 
-    async def _check_budget(self, estimated_tokens: int = 500) -> bool:
-        """Return False if daily budget is exceeded."""
-        if self._redis_offline:
-            return (self._in_memory_tokens + estimated_tokens) <= settings.groq_daily_token_budget
+    async def flush_budget_to_db(self, db) -> None:
+        """At end of ingestion run: persist today's token count to Postgres.
+        Uses UPSERT so re-runs during the same day accumulate correctly.
+        """
         try:
-            r = await self._get_redis()
-            used = int(await r.get("groq_tokens_today") or 0)
-            return (used + estimated_tokens) <= settings.groq_daily_token_budget
-        except Exception:
-            self._redis_offline = True
-            logger.info("redis_offline_falling_back_to_memory")
-            return (self._in_memory_tokens + estimated_tokens) <= settings.groq_daily_token_budget
-
-    async def _increment_budget(self, tokens: int):
-        """Record token consumption."""
-        if self._redis_offline:
-            self._in_memory_tokens += tokens
-            return
-        try:
-            r = await self._get_redis()
-            await r.incrby("groq_tokens_today", tokens)
-            await r.expire("groq_tokens_today", 86400)  # Reset daily
-        except Exception:
-            self._redis_offline = True
-            self._in_memory_tokens += tokens
+            from sqlalchemy import text
+            today = date.today()
+            tokens = self.get_today_usage()
+            await db.execute(text("""
+                INSERT INTO token_usage_log (run_date, tokens_used, logged_at)
+                VALUES (:today, :tokens, NOW())
+                ON CONFLICT (run_date, model)
+                DO UPDATE SET tokens_used = token_usage_log.tokens_used + EXCLUDED.tokens_used,
+                              logged_at = NOW()
+            """), {"today": today, "tokens": tokens})
+            await db.commit()
+            logger.info("groq_budget_flushed_to_db", tokens=tokens, date=str(today))
+        except Exception as e:
+            logger.warning("groq_budget_flush_failed", error=str(e))
 
     async def chat_json(
         self,
@@ -69,8 +99,8 @@ class GroqClient:
             logger.warning("groq_api_key_missing")
             return {}
 
-        if not await self._check_budget(max_tokens):
-            logger.warning("groq_budget_exceeded")
+        if not self._check_budget(max_tokens):
+            logger.warning("groq_budget_exceeded", daily_budget=settings.groq_daily_token_budget)
             return {}
 
         for attempt in range(retries):
@@ -82,14 +112,14 @@ class GroqClient:
                         {"role": "user", "content": user}
                     ],
                     max_tokens=max_tokens,
-                    temperature=0.1,    # Low temp for structured outputs
+                    temperature=0.1,
                     response_format={"type": "json_object"}
                 )
                 content = resp.choices[0].message.content
 
                 # Track token usage
                 if resp.usage:
-                    await self._increment_budget(resp.usage.total_tokens)
+                    self._increment_budget(resp.usage.total_tokens)
 
                 return json.loads(content)
 
@@ -98,7 +128,8 @@ class GroqClient:
                 if "429" in str(e) and attempt < retries - 1:
                     wait_time = 2 ** attempt
                     logger.warning("groq_rate_limited_retrying", attempt=attempt, wait_time=wait_time)
-                    await asyncio.sleep(wait_time)  # Exponential backoff
+                    import asyncio
+                    await asyncio.sleep(wait_time)
                     continue
 
                 logger.error("groq_call_failed", error=str(e), attempt=attempt)
@@ -118,7 +149,7 @@ class GroqClient:
             yield ""
             return
 
-        if not await self._check_budget(max_tokens):
+        if not self._check_budget(max_tokens):
             yield ""
             return
 
@@ -140,6 +171,7 @@ class GroqClient:
         except Exception as e:
             logger.error("groq_stream_failed", error=str(e))
             yield ""
+
 
 # Singleton instance — reused across all agents
 groq_client = GroqClient()

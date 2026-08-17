@@ -3,6 +3,7 @@ from typing import List, Union
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     # App Settings
     environment: str = "development"
@@ -18,11 +19,8 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_daily_token_budget: int = 500_000
 
-    # Ollama Local LLM
+    # Ollama Local LLM (embeddings only; text generation routes to Groq)
     ollama_base_url: str = "http://localhost:11434"
-
-    # Redis Configurations
-    redis_url: str = "redis://localhost:6379/0"
 
     # Ingestion API Keys (Supporting both backend and root .env styles)
     newsapi_key: str = Field(default="", validation_alias="news_api")
@@ -30,9 +28,9 @@ class Settings(BaseSettings):
     mediastack_key: str = Field(default="", validation_alias="mediastack_api")
     gdelt_enabled: bool = True
 
-    # Ingestion schedule configs
-    ingestion_interval_minutes: int = 15
-    clustering_interval_minutes: int = 30
+    # Internal trigger auth — bearer token for POST /internal/trigger-ingestion
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    internal_trigger_token: str = ""
 
     # CORS Configuration
     cors_origins: Union[str, List[str]] = ["http://localhost:5173", "http://localhost:3000"]
@@ -53,8 +51,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore",          # Ignore other system env variables and password fields
+        extra="ignore",       # Ignore extra system env variables
         case_sensitive=False
     )
+
 
 settings = Settings()

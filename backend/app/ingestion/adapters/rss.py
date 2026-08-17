@@ -2,7 +2,7 @@ import httpx
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from typing import AsyncIterator
-from app.ingestion.base import BaseSourceAdapter, RawArticle
+from app.ingestion.base import BaseSourceAdapter, RawArticle, fetch_with_retry
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,8 +26,7 @@ class RSSAdapter(BaseSourceAdapter):
             for source_name, url in self.FEEDS.items():
                 logger.info("rss_fetching_feed", source=source_name, url=url)
                 try:
-                    resp = await client.get(url)
-                    resp.raise_for_status()
+                    resp = await fetch_with_retry(client, "get", url)
                     xml_content = resp.content
                 except Exception as e:
                     logger.error("rss_fetch_failed", source=source_name, error=str(e))

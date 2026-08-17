@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import json
 from app.core.logging import get_logger
-from app.ai.ollama_client import ollama_client
+from app.ai.groq_client import groq_client  # Using Groq for event generation — qwen2.5:7b
+                                             # (~4GB RAM) cannot coexist with nomic-embed-text
+                                             # on the 1GB e2-micro VM.
 
 logger = get_logger(__name__)
 
@@ -117,7 +119,12 @@ async def run_clustering(db: AsyncSession):
             summaries = "\\n".join([f"- {art.title}: {str(art.content_raw)[:200]}" for art in cluster_articles])
             prompt = EVENT_GENERATION_PROMPT.format(article_summaries=summaries)
 
-            gen_result = await ollama_client.generate_json("qwen2.5:7b", prompt)
+            gen_result = await groq_client.chat_json(
+                model="llama-3.3-70b-versatile",
+                system="You are a geopolitical intelligence analyst. Given a set of related news article summaries, generate a concise structured event record.",
+                user=prompt,
+                max_tokens=400
+            )
             if not isinstance(gen_result, dict):
                 gen_result = {
                     "title": "New Event",

@@ -220,3 +220,19 @@ ON CONFLICT (name) DO UPDATE SET
     base_url = EXCLUDED.base_url,
     country = EXCLUDED.country,
     credibility_score = EXCLUDED.credibility_score;
+
+-- Migration 012: Token usage tracking (replaces Redis groq_tokens_today key)
+-- Stores daily Groq API token consumption for budget enforcement across process restarts.
+-- The application maintains an in-memory counter (thread-safe) and flushes to this table
+-- at the end of each ingestion run. On startup, the counter is restored from this table
+-- so the daily budget is respected even after a restart mid-day.
+CREATE TABLE IF NOT EXISTS token_usage_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    tokens_used INTEGER NOT NULL DEFAULT 0,
+    model TEXT DEFAULT 'all',  -- 'all' for aggregate; can be per-model if needed later
+    logged_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (run_date, model)
+);
+CREATE INDEX IF NOT EXISTS token_usage_log_run_date_idx ON token_usage_log (run_date DESC);
+

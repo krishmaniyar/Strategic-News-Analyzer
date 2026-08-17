@@ -1,7 +1,7 @@
 import httpx
 from typing import AsyncIterator
 from datetime import datetime
-from app.ingestion.base import BaseSourceAdapter, RawArticle
+from app.ingestion.base import BaseSourceAdapter, RawArticle, fetch_with_retry
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,8 +31,7 @@ class NewsAPIAdapter(BaseSourceAdapter):
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(self.BASE_URL, params=params)
-                resp.raise_for_status()
+                resp = await fetch_with_retry(client, "get", self.BASE_URL, params=params)
                 data = resp.json()
         except Exception as e:
             logger.error("newsapi_fetch_failed", error=str(e))
