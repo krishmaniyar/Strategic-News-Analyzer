@@ -46,9 +46,9 @@ fi
 echo "[2/9] Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
+    python3 \
+    python3-venv \
+    python3-dev \
     python3-pip \
     build-essential \
     libpq-dev \
@@ -77,11 +77,12 @@ mkdir -p "${OLLAMA_OVERRIDE_DIR}"
 cat > "${OLLAMA_OVERRIDE_DIR}/memory-limits.conf" <<'EOF'
 [Service]
 # Keep model in RAM for 5 minutes after last use, then unload.
-# This prevents nomic-embed-text from competing with the API's 350M budget.
+# This prevents nomic-embed-text from competing with FastAPI's RAM budget.
 Environment="OLLAMA_KEEP_ALIVE=5m"
-# Hard RAM limit — Ollama is OOM-killed if it exceeds this.
-MemoryMax=500M
-MemoryHigh=450M
+# Tuned for t3.small (2 GB RAM): Ollama=700M, FastAPI=500M, OS+Nginx=~150M
+# If using t3.micro (1 GB): change to MemoryMax=500M / MemoryHigh=450M
+MemoryMax=700M
+MemoryHigh=600M
 EOF
 systemctl daemon-reload
 echo "  Ollama memory limits applied."
@@ -122,7 +123,7 @@ else
     git clone --branch "${BRANCH}" "${REPO_URL}" "${INSTALL_DIR}"
 fi
 
-python3.11 -m venv "${VENV_DIR}"
+python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/pip" install --upgrade pip --quiet
 "${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/backend/requirements.txt" --quiet
 echo "  Python venv created and dependencies installed."
