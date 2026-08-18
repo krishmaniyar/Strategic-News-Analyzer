@@ -43,7 +43,7 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
             prompt = f"Context:\n{context}\n\nQuestion: {request.question}"
 
             async for chunk in groq_client.stream_chat(
-                model="qwen/qwen3.6-27b",
+                model="openai/gpt-oss-120b",
                 system=RAG_SYSTEM_PROMPT,
                 user=prompt,
                 max_tokens=1000

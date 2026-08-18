@@ -51,7 +51,7 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
     )
 
     forecast_json = await groq_client.chat_json(
-        model="qwen/qwen3.6-27b",
+        model="openai/gpt-oss-120b",
         system=prompt,
         user="Generate the forecast JSON based on the context.",
         max_tokens=2000

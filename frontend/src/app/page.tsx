@@ -58,6 +58,7 @@ function StatCard({ icon, label, value, sub, color = "blue", delay = "0s", loadi
 
 export default function Home() {
   const [riskData, setRiskData] = useState<Record<string, CountryRiskData>>({})
+  const [analyticsStats, setAnalyticsStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
   const [selectedRiskData, setSelectedRiskData] = useState<CountryRiskData | null>(null)
@@ -68,12 +69,19 @@ export default function Home() {
   useEffect(() => {
     const fetchRiskMap = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v2/dashboard/risk_map`)
-        if (!res.ok) throw new Error(`${res.status}`)
-        const data = await res.json()
-        setRiskData(data.countries || {})
+        const [res, statsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v2/dashboard/risk_map`),
+          fetch(`${API_BASE_URL}/api/v2/analytics/stats`)
+        ])
+        if (res.ok) {
+          const data = await res.json()
+          setRiskData(data.countries || {})
+        }
+        if (statsRes.ok) {
+          setAnalyticsStats(await statsRes.json())
+        }
       } catch (e) {
-        console.error("Failed to load risk map data:", e)
+        console.error("Failed to load dashboard data:", e)
       } finally {
         setLoading(false)
       }
@@ -117,7 +125,11 @@ export default function Home() {
   const totalCountries = Object.keys(riskData).length
   const criticalCount = Object.values(riskData).filter(d => d.risk === "Critical").length
   const highCount = Object.values(riskData).filter(d => d.risk === "High").length
-  const totalArticles = Object.values(riskData).reduce((sum, d) => sum + d.article_count, 0)
+  
+  // Use analytics stats if available, otherwise fallback
+  const totalArticles = analyticsStats?.total_articles || Object.values(riskData).reduce((sum, d) => sum + d.article_count, 0)
+  const activeEvents = analyticsStats?.active_events || 0
+  
   const avgSentiment = totalCountries > 0
     ? Object.values(riskData).reduce((sum, d) => sum + d.avg_sentiment, 0) / totalCountries
     : 0
@@ -142,7 +154,7 @@ export default function Home() {
       {/* KPI stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={<Globe className="w-4 h-4" />} label="Countries Tracked" value={loading ? "—" : totalCountries} sub="Active monitoring zones" color="blue" delay="0s" loading={loading} />
-        <StatCard icon={<AlertTriangle className="w-4 h-4" />} label="Critical / High" value={loading ? "—" : criticalCount + highCount} sub={`${criticalCount} critical, ${highCount} high`} color="red" delay="0.06s" loading={loading} />
+        <StatCard icon={<AlertTriangle className="w-4 h-4" />} label="Active Events" value={loading ? "—" : activeEvents} sub="Ongoing geopolitical clusters" color="amber" delay="0.06s" loading={loading} />
         <StatCard icon={<TrendingDown className="w-4 h-4" />} label="Avg Sentiment" value={loading ? "—" : `${avgSentiment > 0 ? "+" : ""}${avgSentiment.toFixed(2)}`} sub={avgSentiment < -0.2 ? "Negative global mood" : "Stable sentiment"} color={avgSentiment < -0.2 ? "red" : avgSentiment > 0.2 ? "green" : "amber"} delay="0.12s" loading={loading} />
         <StatCard icon={<BarChart3 className="w-4 h-4" />} label="Articles Analyzed" value={loading ? "—" : totalArticles.toLocaleString()} sub="AI-processed & indexed" color="green" delay="0.18s" loading={loading} />
       </div>

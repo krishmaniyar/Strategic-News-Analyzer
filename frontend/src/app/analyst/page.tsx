@@ -13,12 +13,12 @@ export default function AnalystPage() {
             <h1 className="text-2xl font-bold text-slate-100 tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
               AI Analyst Interface
             </h1>
-            <p className="text-sm text-slate-600 mt-1">Hybrid RAG query engine · Groq Qwen-3.6-27b</p>
+            <p className="text-sm text-slate-600 mt-1">Hybrid RAG query engine · Groq GPT OSS 120B</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/[0.06] border border-purple-500/15">
               <Cpu className="w-3 h-3 text-purple-400" />
-              <span className="text-[10px] font-mono text-purple-400">Qwen 3.6 27B</span>
+              <span className="text-[10px] font-mono text-purple-400">GPT OSS 120B</span>
             </div>
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/[0.06] border border-blue-500/15">
               <Database className="w-3 h-3 text-blue-400" />

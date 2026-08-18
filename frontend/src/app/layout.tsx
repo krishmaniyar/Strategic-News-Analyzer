@@ -115,7 +115,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           {/* System tag */}
           <div className="flex items-center gap-2 text-slate-700">
             <Cpu className="w-3 h-3" />
-            <span className="text-[9px] font-mono uppercase tracking-[0.08em]">Groq · Qwen-3.6-27b</span>
+            <span className="text-[9px] font-mono uppercase tracking-[0.08em]">Groq · GPT OSS 120B</span>
           </div>
         </div>
       </aside>
