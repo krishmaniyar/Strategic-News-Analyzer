@@ -11,7 +11,7 @@ uvicorn[standard]==0.35.0
 
 # Database (async PostgreSQL — Supabase)
 sqlalchemy[asyncio]==2.0.41
-asyncpg==0.30.0
+asyncpg
 
 # Settings & validation
 pydantic==2.11.7
@@ -37,9 +37,9 @@ pytz==2025.2
 structlog==25.4.0
 
 # ML / Embeddings
-scikit-learn==1.7.1
-numpy==2.3.1
-pandas==2.3.1
+scikit-learn
+numpy
+pandas
 
 # WebSocket support
 websockets==14.2
