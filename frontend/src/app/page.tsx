@@ -127,8 +127,8 @@ export default function Home() {
   const highCount = Object.values(riskData).filter(d => d.risk === "High").length
   
   // Use analytics stats if available, otherwise fallback
-  const totalArticles = analyticsStats?.total_articles || Object.values(riskData).reduce((sum, d) => sum + d.article_count, 0)
-  const activeEvents = analyticsStats?.active_events || 0
+  const totalArticles = analyticsStats?.articles || Object.values(riskData).reduce((sum, d) => sum + d.article_count, 0)
+  const activeEvents = analyticsStats?.events || 0
   
   const avgSentiment = totalCountries > 0
     ? Object.values(riskData).reduce((sum, d) => sum + d.avg_sentiment, 0) / totalCountries
