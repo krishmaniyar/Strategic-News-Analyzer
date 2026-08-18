@@ -119,7 +119,7 @@ echo "[6/9] Cloning repo and setting up Python environment..."
 
 # Pre-install heavy data science packages and C-extensions via apt 
 # to avoid 40-minute source compilation on Python 3.14
-apt-get install -y python3-sklearn python3-asyncpg python3-pandas
+apt-get install -y python3-sklearn python3-asyncpg python3-pandas python3-pydantic python3-pydantic-settings
 
 if [ ! -d "${INSTALL_DIR}/.git" ]; then
     git clone -b v3-native-backend https://github.com/krishmaniyar/Strategic-News-Analyzer.git "${INSTALL_DIR}"

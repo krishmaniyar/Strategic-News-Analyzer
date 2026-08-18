@@ -14,8 +14,8 @@ sqlalchemy[asyncio]==2.0.41
 asyncpg
 
 # Settings & validation
-pydantic==2.11.7
-pydantic-settings==2.10.1
+pydantic
+pydantic-settings
 python-dotenv==1.1.1
 
 # HTTP client
