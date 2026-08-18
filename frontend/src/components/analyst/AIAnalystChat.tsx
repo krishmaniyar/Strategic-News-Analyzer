@@ -169,7 +169,8 @@ export function AIAnalystChat() {
             currentContent += data.content
             setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: currentContent } : m))
           } else if (data.type === "done") {
-            setMessages(prev => prev.map(m => m.id === asstId ? { ...m, sources: data.sources } : m))
+            const uniqueSources = data.sources?.filter((v: any, i: number, a: any[]) => a.findIndex(t => t.title === v.title) === i) || []
+            setMessages(prev => prev.map(m => m.id === asstId ? { ...m, sources: uniqueSources } : m))
             doneReading = true
           } else if (data.type === "error") {
             setMessages(prev => prev.map(m => m.id === asstId ? { ...m, content: currentContent + "\n\n[Error during generation]" } : m))
