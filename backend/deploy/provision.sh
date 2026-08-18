@@ -102,12 +102,14 @@ fi
 
 # ─── 5. Firewall ─────────────────────────────────────────────────────────────
 echo "[5/9] Configuring UFW firewall..."
-ufw --force reset
+# IMPORTANT: Allow SSH FIRST before any reset, so we never lock ourselves out.
+# ufw --force reset would wipe all rules including SSH — instead we build up
+# rules without resetting, then set defaults.
+ufw allow 22/tcp comment "SSH"    # Always add SSH rule first
+ufw allow 80/tcp comment "HTTP (Nginx → Let's Encrypt)"
+ufw allow 443/tcp comment "HTTPS (Nginx)"
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp   comment "SSH"
-ufw allow 80/tcp   comment "HTTP (Nginx → Let's Encrypt)"
-ufw allow 443/tcp  comment "HTTPS (Nginx)"
 # Port 8000 is intentionally NOT opened — FastAPI binds to 127.0.0.1 only
 ufw --force enable
 echo "  UFW configured: 22, 80, 443 open. Port 8000 NOT exposed."
