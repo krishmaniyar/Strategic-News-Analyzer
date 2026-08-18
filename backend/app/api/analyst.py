@@ -31,7 +31,7 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
     async def generate():
         try:
             q_embedding = await ollama_client.embed(request.question)
-            chunks = await hybrid_retrieve(db, request.question, q_embedding, top_k=5)
+            chunks = await hybrid_retrieve(db, request.question, q_embedding, top_k=10)
 
             sources = [{"id": str(c['article_id']), "title": c['title'], "url": c['url']} for c in chunks]
 

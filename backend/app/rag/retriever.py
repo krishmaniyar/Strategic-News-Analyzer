@@ -53,12 +53,25 @@ async def hybrid_retrieve(
         JOIN articles a ON a.id = r.article_id
         LEFT JOIN sources s ON s.id = a.source_id
         ORDER BY r.rrf_score DESC
-        LIMIT :top_k
+        LIMIT 40
     """), {
         "q_embed": q_embed_str,
         "query": query,
-        "days": str(date_filter_days),
-        "top_k": top_k
+        "days": str(date_filter_days)
     })
 
-    return [dict(row._mapping) for row in results]
+    rows = results.fetchall()
+    
+    unique_results = []
+    seen_titles = set()
+    
+    for row in rows:
+        d = dict(row._mapping)
+        title = d.get('title')
+        if title and title not in seen_titles:
+            seen_titles.add(title)
+            unique_results.append(d)
+        if len(unique_results) >= top_k:
+            break
+            
+    return unique_results

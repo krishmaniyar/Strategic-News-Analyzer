@@ -21,7 +21,7 @@ async def rag_query(db: AsyncSession, question: str) -> dict:
     q_embedding = await ollama_client.embed(question)
 
     # 2. Retrieve hybrid results
-    chunks = await hybrid_retrieve(db, question, q_embedding, top_k=5)
+    chunks = await hybrid_retrieve(db, question, q_embedding, top_k=10)
 
     if not chunks:
         return {"answer": "No relevant articles found in the database for this query.",
