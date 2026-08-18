@@ -84,7 +84,7 @@ export default function Home() {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v2/articles/?limit=20`)
+        const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=20`)
         if (res.ok) {
           const data = await res.json()
           setLatestArticles(data.articles?.map((a: any) => ({ title: a.title, url: a.url })) || [])

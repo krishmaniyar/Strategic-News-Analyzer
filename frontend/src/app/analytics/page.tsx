@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
     const fetchStats = async () => {
       try {
         const [aRes, eRes, entRes, fRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/v2/articles/?limit=1`),
+          fetch(`${API_BASE_URL}/api/v2/articles?limit=1`),
           fetch(`${API_BASE_URL}/api/v2/events?limit=1`),
           fetch(`${API_BASE_URL}/api/v2/entities?limit=1`),
           fetch(`${API_BASE_URL}/api/v2/forecasts/`),

@@ -15,7 +15,11 @@ engine = create_async_engine(
     pool_pre_ping=True,
     echo=False,
     pool_size=10,
-    max_overflow=20
+    max_overflow=20,
+    connect_args={
+        "statement_cache_size": 0,  # Required for PgBouncer transaction mode compatibility
+        "prepared_statement_cache_size": 0
+    }
 )
 
 # Async session maker

@@ -108,7 +108,7 @@ export default function FeedPage() {
   const fetchArticles = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v2/articles/?limit=100`)
+      const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=100`)
       if (res.ok) {
         const data = await res.json()
         setArticles(data.articles || [])
