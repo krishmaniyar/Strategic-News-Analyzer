@@ -35,7 +35,7 @@ async def rag_query(db: AsyncSession, question: str) -> dict:
 
     # 4. Generate via Groq 70b
     answer_json = await groq_client.chat_json(
-        model="qwen3.6-27b",
+        model="qwen/qwen3.6-27b",
         system=RAG_SYSTEM_PROMPT,
         user=f"Context:\n{context}\n\nQuestion: {question}",
         max_tokens=1000
