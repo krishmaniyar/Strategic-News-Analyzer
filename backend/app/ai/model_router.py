@@ -17,19 +17,19 @@ def get_model(task: TaskType) -> tuple[str, str]:
     """Returns a tuple of (model_name, provider) where provider is 'groq' or 'ollama'."""
     routing = {
         TaskType.EMBEDDING:           ("nomic-embed-text",          "ollama"),
-        TaskType.SENTIMENT:           ("llama-3.1-8b-instant",      "groq"),
-        TaskType.BIAS:                ("llama-3.1-8b-instant",      "groq"),
-        TaskType.TRANSLATION:         ("llama-3.1-8b-instant",      "groq"),
-        TaskType.SUMMARIZATION:       ("llama-3.1-8b-instant",      "groq"),
-        TaskType.STRATEGIC_SCORING:   ("llama-3.1-8b-instant",      "groq"),
+        TaskType.SENTIMENT:           ("qwen3.6-27b",      "groq"),
+        TaskType.BIAS:                ("qwen3.6-27b",      "groq"),
+        TaskType.TRANSLATION:         ("qwen3.6-27b",      "groq"),
+        TaskType.SUMMARIZATION:       ("qwen3.6-27b",      "groq"),
+        TaskType.STRATEGIC_SCORING:   ("qwen3.6-27b",      "groq"),
 
         # Routing configured to use Groq for entity extraction
-        TaskType.ENTITY_EXTRACTION:   ("llama-3.1-8b-instant",      "groq"),
-        TaskType.KG_EXTRACTION:       ("llama-3.1-8b-instant",      "groq"),
+        TaskType.ENTITY_EXTRACTION:   ("qwen3.6-27b",      "groq"),
+        TaskType.KG_EXTRACTION:       ("qwen3.6-27b",      "groq"),
 
         # Advanced cloud LLM routing
-        TaskType.FORECASTING:         ("llama-3.3-70b-versatile",   "groq"),
-        TaskType.RAG_QA:              ("llama-3.3-70b-versatile",   "groq"),
-        TaskType.EVENT_TITLE:         ("llama-3.1-8b-instant",      "groq"),
+        TaskType.FORECASTING:         ("qwen3.6-27b",   "groq"),
+        TaskType.RAG_QA:              ("qwen3.6-27b",   "groq"),
+        TaskType.EVENT_TITLE:         ("qwen3.6-27b",      "groq"),
     }
     return routing[task]

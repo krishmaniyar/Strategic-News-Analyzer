@@ -120,7 +120,7 @@ async def run_clustering(db: AsyncSession):
             prompt = EVENT_GENERATION_PROMPT.format(article_summaries=summaries)
 
             gen_result = await groq_client.chat_json(
-                model="llama-3.3-70b-versatile",
+                model="qwen3.6-27b",
                 system="You are a geopolitical intelligence analyst. Given a set of related news article summaries, generate a concise structured event record.",
                 user=prompt,
                 max_tokens=400
