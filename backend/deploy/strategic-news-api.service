@@ -13,9 +13,9 @@ Group=strategic-news
 WorkingDirectory=/opt/strategic-news/backend
 EnvironmentFile=/opt/strategic-news/.env.production
 
-# --workers 1 is deliberate: single vCPU, single process, APScheduler runs
-# ingestion in its own OS thread. More workers would each spin up their own
-# APScheduler and attempt to run the ingestion job concurrently.
+# --workers 1 is deliberate: single vCPU (AWS t3.small/t3.micro), single process,
+# APScheduler runs ingestion in its own OS thread. More workers would each
+# spin up their own APScheduler and attempt to run the ingestion job concurrently.
 ExecStart=/opt/strategic-news/venv/bin/uvicorn app.main:app \
     --host 127.0.0.1 \
     --port 8000 \
@@ -29,10 +29,12 @@ StandardError=journal
 SyslogIdentifier=strategic-news-api
 
 # Memory limits (cgroup v2 — native on Ubuntu 24.04)
-# MemoryHigh: soft throttle (kernel slows allocation, triggers swap)
-# MemoryMax: hard limit (process killed if exceeded — OOMKiller)
-MemoryHigh=300M
-MemoryMax=350M
+# Tuned for AWS t3.small (2 GB RAM):
+#   t3.small budget: FastAPI=500M, Ollama=700M, OS+Nginx=~150M → peak ~1.35GB of 2GB
+# If using t3.micro (1 GB): lower these to MemoryHigh=250M / MemoryMax=300M
+#   and rely on the 2GB swap file as safety net.
+MemoryHigh=450M
+MemoryMax=500M
 
 # Security hardening — no container boundary protects us now
 NoNewPrivileges=yes

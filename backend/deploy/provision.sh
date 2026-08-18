@@ -88,9 +88,11 @@ systemctl daemon-reload
 echo "  Ollama memory limits applied."
 
 # ─── 4. Swap file ────────────────────────────────────────────────────────────
-echo "[4/9] Setting up 2GB swap file..."
+echo "[4/9] Setting up 512MB swap file..."
+# t3.small has 2 GB RAM — swap is just a safety net, not primary memory.
+# Using 512 MB to conserve space on the 8 GB EBS volume.
 if [ ! -f /swapfile ]; then
-    fallocate -l 2G /swapfile
+    fallocate -l 512M /swapfile
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile
@@ -102,33 +104,43 @@ fi
 
 # ─── 5. Firewall ─────────────────────────────────────────────────────────────
 echo "[5/9] Configuring UFW firewall..."
-# IMPORTANT: Allow SSH FIRST before any reset, so we never lock ourselves out.
-# ufw --force reset would wipe all rules including SSH — instead we build up
-# rules without resetting, then set defaults.
-ufw allow 22/tcp comment "SSH"    # Always add SSH rule first
-ufw allow 80/tcp comment "HTTP (Nginx → Let's Encrypt)"
-ufw allow 443/tcp comment "HTTPS (Nginx)"
+# IMPORTANT: Allow SSH FIRST before any changes, so we never lock ourselves out.
+ufw allow 22/tcp comment "SSH"
+ufw allow 80/tcp comment "HTTP Nginx"
+ufw allow 443/tcp comment "HTTPS Nginx"
 ufw default deny incoming
 ufw default allow outgoing
-# Port 8000 is intentionally NOT opened — FastAPI binds to 127.0.0.1 only
+# Port 8000 is intentionally NOT opened - FastAPI binds to 127.0.0.1 only
 ufw --force enable
 echo "  UFW configured: 22, 80, 443 open. Port 8000 NOT exposed."
 
-# ─── 6. Clone repo + venv + deps ─────────────────────────────────────────────
+# ─── 6. App directory & Virtual Environment ───────────────────────────────────
 echo "[6/9] Cloning repo and setting up Python environment..."
-if [ -d "${INSTALL_DIR}/.git" ]; then
-    echo "  Repo already cloned — pulling latest..."
-    git -C "${INSTALL_DIR}" fetch origin
-    git -C "${INSTALL_DIR}" checkout "${BRANCH}"
-    git -C "${INSTALL_DIR}" pull origin "${BRANCH}"
+
+# Pre-install heavy data science packages and C-extensions via apt 
+# to avoid 40-minute source compilation on Python 3.14
+apt-get install -y python3-sklearn python3-asyncpg python3-pandas
+
+if [ ! -d "${INSTALL_DIR}/.git" ]; then
+    git clone -b v3-native-backend https://github.com/krishmaniyar/Strategic-News-Analyzer.git "${INSTALL_DIR}"
+    echo "  Repo cloned."
 else
-    git clone --branch "${BRANCH}" "${REPO_URL}" "${INSTALL_DIR}"
+    echo "  Repo already cloned — pulling latest..."
+    cd "${INSTALL_DIR}" && git pull origin v3-native-backend
 fi
 
-python3 -m venv "${VENV_DIR}"
-"${VENV_DIR}/bin/pip" install --upgrade pip --quiet
-"${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/backend/requirements.txt" --quiet
-echo "  Python venv created and dependencies installed."
+# Create venv with access to system packages (like python3-sklearn)
+if [ ! -d "${VENV_DIR}" ]; then
+    python3 -m venv --system-site-packages "${VENV_DIR}"
+    chown -R strategic-news:strategic-news "${VENV_DIR}"
+    echo "  Virtual environment created with system site packages."
+fi
+
+# Install remaining dependencies from requirements.txt
+echo "  Installing/updating pip dependencies..."
+# We run as strategic-news to avoid root pip warnings
+sudo -H -u strategic-news bash -c "source ${VENV_DIR}/bin/activate && pip install --upgrade pip --quiet && pip install -r ${INSTALL_DIR}/backend/requirements.txt --quiet"
+echo "  Dependencies installed."
 
 # ─── 7. .env.production ──────────────────────────────────────────────────────
 echo "[7/9] Setting up .env.production..."
