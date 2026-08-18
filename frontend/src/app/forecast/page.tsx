@@ -127,7 +127,7 @@ export default function ForecastPage() {
           </div>
           <div>
             <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">Reasoning Engine</p>
-            <p className="text-[13px] font-bold text-slate-100" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Llama 3.3 70B</p>
+            <p className="text-[13px] font-bold text-slate-100" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Qwen 3.6 27B</p>
             <p className="text-[10px] text-slate-600 mt-0.5">Cloud RAG agent</p>
           </div>
         </div>

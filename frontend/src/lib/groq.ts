@@ -45,7 +45,7 @@ async function chatJson(
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const resp = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "qwen3.6-27b",
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

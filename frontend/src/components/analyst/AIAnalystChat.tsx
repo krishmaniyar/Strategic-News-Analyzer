@@ -121,7 +121,7 @@ export function AIAnalystChat() {
     {
       id: "init",
       role: "assistant",
-      content: "Hello. I am your Geopolitical AI Analyst — powered by Llama 3.3 70B with hybrid RAG retrieval over your indexed intelligence corpus. Ask me anything about current events, entities, risk assessments, or geopolitical dynamics."
+      content: "Hello. I am your Geopolitical AI Analyst — powered by Qwen 3.6 27B with hybrid RAG retrieval over your indexed intelligence corpus. Ask me anything about current events, entities, risk assessments, or geopolitical dynamics."
     }
   ])
   const [input, setInput] = useState("")
@@ -200,7 +200,7 @@ export function AIAnalystChat() {
             AI Analyst
           </p>
           <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
-            {isLoading ? "Analyzing..." : "Ready · Llama 3.3 70b"}
+            {isLoading ? "Analyzing..." : "Ready · Qwen 3.6 27B"}
           </p>
         </div>
         <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-mono font-bold uppercase
