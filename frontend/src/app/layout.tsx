@@ -9,6 +9,7 @@ import {
   ShieldAlert, Globe, Radio, Activity, GitGraph,
   BookOpen, BarChart3, Menu, X, Cpu, Wifi, WifiOff
 } from "lucide-react"
+import { API_BASE_URL } from "@/lib/api"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -30,7 +31,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/health", { signal: AbortSignal.timeout(3000) })
+        const res = await fetch(`${API_BASE_URL}/health`, { signal: AbortSignal.timeout(3000) })
         setApiOnline(res.ok)
       } catch { setApiOnline(false) }
       finally { setChecking(false) }
