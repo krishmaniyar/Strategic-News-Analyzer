@@ -12,7 +12,7 @@ from pytz import timezone as pytz_timezone
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.core.metrics import ingestion_job_status, ingestion_last_run_duration, ingestion_last_run_articles
-from app.api import auth, articles, admin, entities, events, analyst, forecasts, feed, risk_map
+from app.api import auth, articles, admin, entities, events, analyst, forecasts, feed, risk_map, analytics
 
 logger = get_logger(__name__)
 
@@ -169,6 +169,7 @@ app.include_router(analyst.router)
 app.include_router(forecasts.router)
 app.include_router(feed.router)
 app.include_router(risk_map.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["Health"])

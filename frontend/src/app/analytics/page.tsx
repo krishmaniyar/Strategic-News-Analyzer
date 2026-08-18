@@ -7,23 +7,7 @@ import {
 } from "recharts"
 import { BarChart2, TrendingUp, RefreshCw, AlertTriangle, Users, FileText, Globe } from "lucide-react"
 
-// Mock trend data (real volume data comes from backend)
-const MONTHLY = [
-  { month: "Feb", risk: 30, sentiment: 5,   articles: 32  },
-  { month: "Mar", risk: 45, sentiment: -20, articles: 40  },
-  { month: "Apr", risk: 60, sentiment: -40, articles: 55  },
-  { month: "May", risk: 55, sentiment: -15, articles: 48  },
-  { month: "Jun", risk: 70, sentiment: -50, articles: 72  },
-  { month: "Jul", risk: 85, sentiment: -60, articles: 90  },
-  { month: "Aug", risk: 78, sentiment: -45, articles: 110 },
-]
-
-const RISK_PIE = [
-  { name: "Critical", value: 8,  color: "#ef4444" },
-  { name: "High",     value: 22, color: "#f97316" },
-  { name: "Medium",   value: 38, color: "#f59e0b" },
-  { name: "Low",      value: 32, color: "#10b981" },
-]
+// Dynamic trend data loaded from backend API
 
 const TOOLTIP_STYLE = {
   contentStyle: {
@@ -49,28 +33,27 @@ interface BackendStats {
 export default function AnalyticsPage() {
   const [mounted, setMounted] = useState(false)
   const [stats, setStats] = useState<BackendStats>({ articles: 0, events: 0, entities: 0, forecasts: 0 })
+  const [monthlyData, setMonthlyData] = useState<any[]>([])
+  const [pieData, setPieData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setMounted(true)
     const fetchStats = async () => {
       try {
-        const [aRes, eRes, entRes, fRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/v2/articles?limit=1`),
-          fetch(`${API_BASE_URL}/api/v2/events?limit=1`),
-          fetch(`${API_BASE_URL}/api/v2/entities?limit=1`),
-          fetch(`${API_BASE_URL}/api/v2/forecasts/`),
+        const [res, chartsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v2/analytics/stats`),
+          fetch(`${API_BASE_URL}/api/v2/analytics/charts`)
         ])
-        const articles = aRes.ok ? (await aRes.json()).count ?? 0 : 0
-        const evRes2 = eRes.ok ? await eRes.json() : []
-        const entRes2 = entRes.ok ? await entRes.json() : []
-        const forecasts = fRes.ok ? (await fRes.json()).length ?? 0 : 0
-        setStats({
-          articles,
-          events: Array.isArray(evRes2) ? evRes2.length : 0,
-          entities: Array.isArray(entRes2) ? entRes2.length : 0,
-          forecasts
-        })
+        if (res.ok) {
+          const data = await res.json()
+          setStats(data)
+        }
+        if (chartsRes.ok) {
+          const chartsData = await chartsRes.json()
+          setMonthlyData(chartsData.monthly || [])
+          setPieData(chartsData.risk_pie || [])
+        }
       } catch {}
       finally { setLoading(false) }
     }
@@ -137,7 +120,7 @@ export default function AnalyticsPage() {
             </span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={MONTHLY}>
+            <AreaChart data={monthlyData}>
               <defs>
                 <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
@@ -162,7 +145,7 @@ export default function AnalyticsPage() {
             </span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={MONTHLY}>
+            <AreaChart data={monthlyData}>
               <defs>
                 <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
@@ -187,7 +170,7 @@ export default function AnalyticsPage() {
             </span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={MONTHLY} barSize={24}>
+            <BarChart data={monthlyData} barSize={24}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
               <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -207,9 +190,9 @@ export default function AnalyticsPage() {
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie data={RISK_PIE} cx="50%" cy="50%" outerRadius={80} innerRadius={45}
+              <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} innerRadius={45}
                 dataKey="value" paddingAngle={3} strokeWidth={0}>
-                {RISK_PIE.map((entry, index) => (
+                {pieData.map((entry, index) => (
                   <Cell key={index} fill={entry.color} opacity={0.85} />
                 ))}
               </Pie>
