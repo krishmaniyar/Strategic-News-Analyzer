@@ -11,6 +11,8 @@ import {
 } from "lucide-react"
 import { API_BASE_URL } from "@/lib/api"
 
+import Image from "next/image"
+
 const inter = Inter({ subsets: ["latin"] })
 
 const NAV_ITEMS = [
@@ -45,32 +47,35 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
     <>
       {/* Mobile overlay */}
       {open && (
-        <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden" onClick={onClose} />
+        <div className="fixed inset-0 z-30 bg-black/80 backdrop-blur-md md:hidden" onClick={onClose} />
       )}
       <aside
         className={`
           fixed md:relative z-40 md:z-auto
-          flex flex-col h-full w-[220px] shrink-0
-          border-r border-white/[0.05]
+          flex flex-col h-full w-[240px] shrink-0
+          border-r border-white/[0.04]
           transition-transform duration-300
           ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
-        style={{ background: "rgba(4,4,12,0.97)", backdropFilter: "blur(32px)" }}
+        style={{ background: "rgba(2, 3, 6, 0.75)", backdropFilter: "blur(40px)" }}
       >
         {/* Logo */}
-        <div className="px-4 pt-5 pb-4 border-b border-white/[0.05]">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-shrink-0">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <ShieldAlert className="w-4 h-4 text-white" />
+        <div className="px-5 pt-6 pb-5 border-b border-white/[0.04] relative">
+          {/* Subtle logo background glow */}
+          <div className="absolute top-1/2 left-8 w-12 h-12 bg-[#00f0ff]/[0.15] blur-xl rounded-full pointer-events-none transform -translate-y-1/2" />
+          
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="relative flex-shrink-0 group">
+              <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#00f0ff]/20 shadow-[0_0_15px_rgba(0,240,255,0.15)] group-hover:border-[#00f0ff]/40 transition-colors">
+                <Image src="/logo.png" alt="SNA Logo" width={36} height={36} className="object-cover" />
               </div>
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#04040c] live-dot" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#020306] live-dot shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-slate-100 tracking-tight leading-none" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              <p className="text-[14px] font-bold text-white tracking-wide leading-none drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                 SNA Platform
               </p>
-              <p className="text-[9px] text-slate-600 font-mono uppercase tracking-[0.1em] mt-0.5">v2.0.0 · Command</p>
+              <p className="text-[9px] text-[#00f0ff]/70 font-mono uppercase tracking-[0.15em] mt-1.5 font-semibold">v3.0.0 · Core</p>
             </div>
           </div>
         </div>
@@ -148,12 +153,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
-      <body className={`${inter.className} bg-[#050508] text-slate-100 flex h-screen overflow-hidden`}>
+      <body className={`${inter.className} bg-[#020306] text-slate-100 flex h-screen overflow-hidden`}>
         {/* Deep ambient glows */}
         <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-          <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full bg-blue-600/[0.04] blur-[120px]" />
-          <div className="absolute bottom-0 left-0 w-[50%] h-[45%] rounded-full bg-indigo-900/[0.06] blur-[140px]" />
-          <div className="absolute top-[30%] left-[25%] w-[40%] h-[40%] rounded-full bg-cyan-900/[0.03] blur-[180px]" />
+          <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-[#00f0ff]/[0.03] blur-[150px]" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#0055ff]/[0.04] blur-[160px]" />
+          <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] rounded-full bg-[#ff0055]/[0.015] blur-[180px]" />
         </div>
 
         {/* Sidebar */}
@@ -162,8 +167,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Main content area */}
         <div className="flex flex-col flex-1 overflow-hidden relative z-10">
           {/* Top bar */}
-          <header className="h-12 shrink-0 border-b border-white/[0.05] flex items-center px-4 gap-3"
-            style={{ background: "rgba(5,5,10,0.8)", backdropFilter: "blur(20px)" }}>
+          <header className="h-14 shrink-0 border-b border-white/[0.04] flex items-center px-6 gap-4"
+            style={{ background: "rgba(2,3,6,0.5)", backdropFilter: "blur(20px)" }}>
             {/* Mobile menu toggle */}
             <button
               onClick={() => setSidebarOpen(true)}

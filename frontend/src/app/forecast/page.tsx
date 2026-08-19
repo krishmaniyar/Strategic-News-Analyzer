@@ -84,13 +84,18 @@ export default function ForecastPage() {
   return (
     <div className="max-w-[1300px] mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between fade-up">
+      <div className="flex items-start justify-between fade-up pb-2 border-b border-white/[0.05] mb-4">
         <div>
-          <p className="page-header-tag mb-1">// PRED — INTELLIGENCE FORECASTING</p>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00f0ff] shadow-[0_0_8px_#00f0ff]" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#00f0ff]/80 font-semibold">
+              Predictive AI Engine
+            </p>
+          </div>
+          <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 tracking-tight leading-none drop-shadow-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             Intelligence Forecasting
           </h1>
-          <p className="text-sm text-slate-600 mt-1">Falsifiable geopolitical predictions tracked via Brier Scores</p>
+          <p className="text-sm font-medium text-slate-500 mt-2">Generate predictive analyses of geopolitical trajectories using live intelligence data</p>
         </div>
         <button onClick={fetchData} disabled={loading}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium text-slate-400 hover:text-slate-200 bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.1] transition-all">

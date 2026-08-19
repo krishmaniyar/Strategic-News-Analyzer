@@ -74,21 +74,28 @@ export default function AnalyticsPage() {
   ]
 
   const KPI_COLORS: Record<string, { bg: string; border: string; text: string; glow: string }> = {
-    blue:   { bg: "rgba(59,130,246,0.06)",  border: "rgba(59,130,246,0.15)",  text: "#60a5fa",  glow: "rgba(59,130,246,0.1)" },
-    red:    { bg: "rgba(239,68,68,0.06)",   border: "rgba(239,68,68,0.15)",   text: "#f87171",  glow: "rgba(239,68,68,0.08)" },
-    purple: { bg: "rgba(139,92,246,0.06)",  border: "rgba(139,92,246,0.15)",  text: "#c084fc",  glow: "rgba(139,92,246,0.08)" },
-    green:  { bg: "rgba(16,185,129,0.06)",  border: "rgba(16,185,129,0.15)",  text: "#34d399",  glow: "rgba(16,185,129,0.08)" },
+    blue:   { bg: "rgba(0,240,255,0.05)",  border: "rgba(0,240,255,0.2)",  text: "#00f0ff",  glow: "rgba(0,240,255,0.15)" },
+    red:    { bg: "rgba(255,0,85,0.05)",   border: "rgba(255,0,85,0.2)",   text: "#ff0055",  glow: "rgba(255,0,85,0.15)" },
+    purple: { bg: "rgba(139,92,246,0.06)", border: "rgba(139,92,246,0.2)", text: "#c084fc",  glow: "rgba(139,92,246,0.15)" },
+    green:  { bg: "rgba(0,255,136,0.05)",  border: "rgba(0,255,136,0.2)",  text: "#00ff88",  glow: "rgba(0,255,136,0.15)" },
   }
 
   return (
     <div className="max-w-[1300px] mx-auto space-y-5">
       {/* Header */}
-      <div className="fade-up">
-        <p className="page-header-tag mb-1">// STATS — SYSTEM ANALYTICS</p>
-        <h1 className="text-2xl font-bold text-slate-100 tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          System Analytics
-        </h1>
-        <p className="text-sm text-slate-600 mt-1">Longitudinal intelligence metrics and risk distribution</p>
+      <div className="flex items-start justify-between fade-up pb-2 border-b border-white/[0.05] mb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00f0ff] shadow-[0_0_8px_#00f0ff]" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#00f0ff]/80 font-semibold">
+              System Analytics
+            </p>
+          </div>
+          <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 tracking-tight leading-none drop-shadow-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Intelligence Metrics
+          </h1>
+          <p className="text-sm font-medium text-slate-500 mt-2">Longitudinal intelligence metrics and risk distribution</p>
+        </div>
       </div>
 
       {/* KPI row */}

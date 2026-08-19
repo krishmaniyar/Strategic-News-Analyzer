@@ -28,30 +28,34 @@ interface StatCardProps {
 
 function StatCard({ icon, label, value, sub, color = "blue", delay = "0s", loading }: StatCardProps) {
   const colorMap = {
-    blue:  { bg: "rgba(59,130,246,0.06)",  border: "rgba(59,130,246,0.15)",  text: "#60a5fa", glow: "rgba(59,130,246,0.12)"  },
-    red:   { bg: "rgba(239,68,68,0.06)",   border: "rgba(239,68,68,0.15)",   text: "#f87171", glow: "rgba(239,68,68,0.1)"   },
-    amber: { bg: "rgba(245,158,11,0.06)",  border: "rgba(245,158,11,0.15)",  text: "#fbbf24", glow: "rgba(245,158,11,0.1)"  },
-    green: { bg: "rgba(16,185,129,0.06)",  border: "rgba(16,185,129,0.15)",  text: "#34d399", glow: "rgba(16,185,129,0.1)"  },
+    blue:  { bg: "rgba(0, 240, 255, 0.05)",  border: "rgba(0, 240, 255, 0.2)",  text: "#00f0ff", glow: "rgba(0, 240, 255, 0.15)" },
+    red:   { bg: "rgba(255, 0, 85, 0.05)",   border: "rgba(255, 0, 85, 0.2)",   text: "#ff0055", glow: "rgba(255, 0, 85, 0.15)"  },
+    amber: { bg: "rgba(255, 170, 0, 0.05)",  border: "rgba(255, 170, 0, 0.2)",  text: "#ffaa00", glow: "rgba(255, 170, 0, 0.15)" },
+    green: { bg: "rgba(0, 255, 136, 0.05)",  border: "rgba(0, 255, 136, 0.2)",  text: "#00ff88", glow: "rgba(0, 255, 136, 0.15)" },
   }
   const c = colorMap[color]
   return (
-    <div className="intel-card p-4 fade-up" style={{ animationDelay: delay, borderColor: c.border, background: c.bg }}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-2 rounded-lg" style={{ background: c.bg, boxShadow: `0 0 16px ${c.glow}` }}>
+    <div className="relative group p-5 fade-up overflow-hidden rounded-2xl transition-all duration-300" style={{ animationDelay: delay, background: "rgba(8,11,18,0.7)", border: `1px solid ${c.border}`, backdropFilter: "blur(24px)" }}>
+      {/* Dynamic Glow */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${c.glow}, transparent 60%)` }} />
+      <div className="flex items-start justify-between mb-4 relative z-10">
+        <div className="p-2.5 rounded-xl border" style={{ background: c.bg, borderColor: c.border, boxShadow: `0 0 20px ${c.glow}` }}>
           <div style={{ color: c.text }}>{icon}</div>
         </div>
-        <span className="text-[9px] font-mono uppercase tracking-[0.12em] text-slate-600">{label}</span>
+        <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-slate-500/80">{label}</span>
       </div>
-      {loading ? (
-        <div className="skeleton h-7 w-20 mt-1" />
-      ) : (
-        <p className="stat-number text-2xl font-bold text-slate-100" style={{ color: c.text }}>
-          {value}
-        </p>
-      )}
-      {sub && !loading && (
-        <p className="text-[10px] text-slate-600 mt-1">{sub}</p>
-      )}
+      <div className="relative z-10 mt-2">
+        {loading ? (
+          <div className="skeleton h-8 w-24 rounded-md" />
+        ) : (
+          <p className="stat-number text-3xl font-extrabold tracking-tight drop-shadow-md" style={{ color: "#ffffff" }}>
+            {value}
+          </p>
+        )}
+        {sub && !loading && (
+          <p className="text-[11px] font-medium text-slate-400 mt-1.5">{sub}</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -138,13 +142,18 @@ export default function Home() {
     <div className="space-y-5 max-w-[1600px] mx-auto">
 
       {/* Page header */}
-      <div className="flex items-start justify-between fade-up">
+      <div className="flex items-start justify-between fade-up pb-2 border-b border-white/[0.05] mb-4">
         <div>
-          <p className="page-header-tag mb-1">// SITREP — GLOBAL INTELLIGENCE OVERVIEW</p>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight leading-none" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            Geopolitical Risk Dashboard
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00f0ff] shadow-[0_0_8px_#00f0ff]" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#00f0ff]/80 font-semibold">
+              Global Intelligence Overview
+            </p>
+          </div>
+          <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-slate-400 tracking-tight leading-none drop-shadow-sm" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Geopolitical Risk Command
           </h1>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-sm font-medium text-slate-500 mt-2">
             {loading ? "Loading intelligence..." : `Monitoring ${totalCountries} countries · ${totalArticles.toLocaleString()} articles analyzed`}
           </p>
         </div>

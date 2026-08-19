@@ -185,28 +185,29 @@ export function AIAnalystChat() {
   const showSuggestions = messages.length <= 1
 
   return (
-    <div className="intel-card flex flex-col h-full overflow-hidden">
+    <div className="intel-card flex flex-col h-full overflow-hidden" style={{ background: "rgba(6,8,12,0.6)" }}>
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-white/[0.05] flex items-center gap-3">
+      <div className="shrink-0 px-5 py-4 border-b border-white/[0.04] flex items-center gap-3 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#00f0ff]/[0.05] to-transparent pointer-events-none" />
         <div className="relative">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-700/30">
-            <Bot className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-[#0055ff]/20 border border-[#00f0ff]/30 flex items-center justify-center shadow-[0_0_15px_rgba(0,240,255,0.15)] relative z-10">
+            <Bot className="w-4 h-4 text-[#00f0ff]" />
           </div>
           {isLoading && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-400 live-dot ring-1 ring-[#04040e]" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#00f0ff] live-dot ring-2 ring-[#06080c] z-20 shadow-[0_0_10px_#00f0ff]" />
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-bold text-slate-200" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+        <div className="flex-1 min-w-0 relative z-10">
+          <p className="text-[14px] font-bold text-white tracking-wide" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             AI Analyst
           </p>
-          <p className="text-[9px] font-mono text-slate-600 uppercase tracking-wider">
-            {isLoading ? "Analyzing..." : "Ready · GPT OSS 120B"}
+          <p className="text-[10px] font-mono text-[#00f0ff]/70 uppercase tracking-widest mt-0.5">
+            {isLoading ? "Running neural analysis..." : "Ready · GPT OSS 120B"}
           </p>
         </div>
-        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-mono font-bold uppercase
-          ${isLoading ? "text-blue-400 bg-blue-400/10 border border-blue-400/20" : "text-emerald-400 bg-emerald-400/10 border border-emerald-400/20"}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? "bg-blue-400 live-dot" : "bg-emerald-400"}`} />
+        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-mono font-bold uppercase relative z-10
+          ${isLoading ? "text-[#00f0ff] bg-[#00f0ff]/10 border border-[#00f0ff]/30 shadow-[0_0_10px_rgba(0,240,255,0.2)]" : "text-emerald-400 bg-emerald-400/10 border border-emerald-400/20"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? "bg-[#00f0ff] live-dot" : "bg-emerald-400"}`} />
           {isLoading ? "Processing" : "Online"}
         </div>
       </div>
@@ -287,22 +288,22 @@ export function AIAnalystChat() {
       </div>
 
       {/* Input */}
-      <div className="shrink-0 p-3 border-t border-white/[0.05]" style={{ background: "rgba(4,4,14,0.8)" }}>
+      <div className="shrink-0 p-4 border-t border-white/[0.04] bg-[#020306]/80 backdrop-blur-md">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage() }} className="flex gap-2">
           <input
             ref={inputRef}
-            className="flex-1 bg-white/[0.03] border border-white/[0.07] rounded-xl px-3.5 py-2.5 text-[12px] text-slate-200
-              placeholder-slate-600 focus:outline-none focus:border-blue-500/40 focus:bg-blue-500/[0.03] transition-all"
-            placeholder="Ask about geopolitical events, risks, entities..."
+            className="flex-1 bg-[#05070a] border border-white/[0.05] rounded-xl px-4 py-3 text-[13px] text-white
+              placeholder-slate-500 focus:outline-none focus:border-[#00f0ff]/50 focus:bg-[#00f0ff]/[0.02] focus:shadow-[0_0_15px_rgba(0,240,255,0.1)] transition-all"
+            placeholder="Query intelligence database..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
           />
           <button type="submit" disabled={isLoading || !input.trim()}
-            className="px-3 py-2.5 rounded-xl text-white font-semibold transition-all flex items-center gap-1.5
-              bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500
-              disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-700/20">
-            <Send className="w-3.5 h-3.5" />
+            className="px-4 py-3 rounded-xl text-black font-bold transition-all flex items-center gap-2
+              bg-[#00f0ff] hover:bg-white hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]
+              disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+            <Send className="w-4 h-4" />
           </button>
         </form>
       </div>
