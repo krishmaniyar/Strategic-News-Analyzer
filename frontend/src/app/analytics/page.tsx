@@ -31,14 +31,14 @@ interface BackendStats {
 }
 
 export default function AnalyticsPage() {
-  const [mounted, setMounted] = useState(false)
+  // M4 FIX: Removed `mounted` state guard — it caused a visible spinner flash on
+  // every navigation to this page. Recharts ResponsiveContainer handles SSR fine.
   const [stats, setStats] = useState<BackendStats>({ articles: 0, events: 0, entities: 0, forecasts: 0 })
   const [monthlyData, setMonthlyData] = useState<any[]>([])
   const [pieData, setPieData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setMounted(true)
     const fetchStats = async () => {
       try {
         const [res, chartsRes] = await Promise.all([
@@ -59,12 +59,6 @@ export default function AnalyticsPage() {
     }
     fetchStats()
   }, [])
-
-  if (!mounted) return (
-    <div className="flex items-center justify-center h-64">
-      <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
-    </div>
-  )
 
   const KPI = [
     { label: "Articles Indexed", value: loading ? "—" : stats.articles.toLocaleString(), icon: <FileText className="w-4 h-4" />, color: "blue" },

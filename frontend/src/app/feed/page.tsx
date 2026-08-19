@@ -107,6 +107,7 @@ export default function FeedPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const wsRef = useRef<WebSocket | null>(null)
+  const searchRef = useRef(search) // H2: tracks latest search without re-running WS effect
   const limit = 50
 
   const fetchArticles = useCallback(async (pageNum: number, searchQuery: string, isLoadMore = false) => {
@@ -144,8 +145,14 @@ export default function FeedPage() {
     fetchArticles(0, search, false)
   }, [search, fetchArticles])
 
+  // Keep searchRef in sync so the WS handler can read the latest value
+  // without needing to be re-created on every keystroke.
+  useEffect(() => { searchRef.current = search }, [search])
+
   useEffect(() => {
-    // WebSocket for live feed
+    // H2 FIX: WebSocket is created once on mount and never torn down on search change.
+    // The handler reads searchRef.current (always up-to-date) to decide whether to
+    // add incoming articles to the live feed.
     const ws = new WebSocket(`${WS_BASE_URL}/ws/feed`)
     wsRef.current = ws
     ws.onopen = () => setWsStatus("connected")
@@ -154,20 +161,21 @@ export default function FeedPage() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data.type === "new_article") {
-          // Only add to live feed if there is no active search to prevent confusion
-          if (!search) {
-             setLiveArticles(prev => [data.data, ...prev.slice(0, 49)])
-          }
+        if (data.type === "new_article" && !searchRef.current) {
+          setLiveArticles(prev => [data.data, ...prev.slice(0, 49)])
         }
       } catch {}
     }
     return () => ws.close()
-  }, [search])
+  }, []) // Empty — WS is created once and never reconnected due to search changes
 
   const allArticles = [...liveArticles, ...articles]
-  // Deduplicate by ID
-  const uniqueArticles = allArticles.filter((a, i, arr) => arr.findIndex(t => t.id === a.id) === i)
+  // M6 FIX: O(n) deduplication using a Map instead of O(n²) findIndex
+  const seen = new Map<string, Article>()
+  for (const a of allArticles) {
+    if (!seen.has(a.id)) seen.set(a.id, a)
+  }
+  const uniqueArticles = Array.from(seen.values())
   
   const filtered = uniqueArticles.filter(a => {
     if (showProcessed && !a.is_processed && !a.analysis) return false

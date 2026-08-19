@@ -27,17 +27,26 @@ async def rag_query(db: AsyncSession, question: str) -> dict:
         return {"answer": "No relevant articles found in the database for this query.",
                 "sources": []}
 
-    # 3. Build context with citations
-    context = "\n\n---\n\n".join([
-        f"[Source {i+1}] {c['title']} ({c['published_at'].date() if c['published_at'] else 'Unknown date'}, {c['source_name']})\n{c['chunk_text']}"
-        for i, c in enumerate(chunks)
-    ])
+    # 3. Build context with citations using XML-style delimiters to resist prompt injection.
+    #    Untrusted article text is clearly bounded so the LLM cannot mistake it for instructions.
+    context_parts = []
+    for i, c in enumerate(chunks):
+        date_str = c['published_at'].date() if c['published_at'] else 'Unknown date'
+        context_parts.append(
+            f"<source id=\"{i+1}\">\n"
+            f"<title>{c['title']}</title>\n"
+            f"<date>{date_str}</date>\n"
+            f"<outlet>{c['source_name']}</outlet>\n"
+            f"<text>{c['chunk_text']}</text>\n"
+            f"</source>"
+        )
+    context = "\n\n".join(context_parts)
 
-    # 4. Generate via Groq 70b
+    # 4. Generate via Groq
     answer_json = await groq_client.chat_json(
         model="openai/gpt-oss-120b",
         system=RAG_SYSTEM_PROMPT,
-        user=f"Context:\n{context}\n\nQuestion: {question}",
+        user=f"<retrieved_sources>\n{context}\n</retrieved_sources>\n\n<user_question>\n{question}\n</user_question>",
         max_tokens=1000
     )
 

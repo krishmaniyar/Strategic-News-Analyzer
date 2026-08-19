@@ -1,7 +1,7 @@
 import json
 import threading
 from datetime import date, datetime
-from groq import AsyncGroq
+from groq import AsyncGroq, RateLimitError
 import httpx
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -74,13 +74,14 @@ class GroqClient:
             from sqlalchemy import text
             today = date.today()
             tokens = self.get_today_usage()
+            model_name = "openai/gpt-oss-120b"
             await db.execute(text("""
-                INSERT INTO token_usage_log (run_date, tokens_used, logged_at)
-                VALUES (:today, :tokens, NOW())
+                INSERT INTO token_usage_log (run_date, model, tokens_used, logged_at)
+                VALUES (:today, :model, :tokens, NOW())
                 ON CONFLICT (run_date, model)
                 DO UPDATE SET tokens_used = token_usage_log.tokens_used + EXCLUDED.tokens_used,
                               logged_at = NOW()
-            """), {"today": today, "tokens": tokens})
+            """), {"today": today, "model": model_name, "tokens": tokens})
             await db.commit()
             logger.info("groq_budget_flushed_to_db", tokens=tokens, date=str(today))
         except Exception as e:
@@ -123,15 +124,18 @@ class GroqClient:
 
                 return json.loads(content)
 
-            except Exception as e:
-                # Handle Rate Limit (HTTP 429)
-                if "429" in str(e) and attempt < retries - 1:
+            except RateLimitError:
+                # Handle Rate Limit (HTTP 429) with typed exception
+                if attempt < retries - 1:
                     wait_time = 2 ** attempt
                     logger.warning("groq_rate_limited_retrying", attempt=attempt, wait_time=wait_time)
                     import asyncio
                     await asyncio.sleep(wait_time)
                     continue
+                logger.error("groq_rate_limit_exhausted", retries=retries)
+                return {}
 
+            except Exception as e:
                 logger.error("groq_call_failed", error=str(e), attempt=attempt)
                 return {}
 
@@ -144,7 +148,7 @@ class GroqClient:
         user: str,
         max_tokens: int = 1000
     ):
-        """Stream Groq API response chunk by chunk."""
+        """Stream Groq API response chunk by chunk. Tracks token usage."""
         if not settings.groq_api_key:
             yield ""
             return
@@ -153,6 +157,7 @@ class GroqClient:
             yield ""
             return
 
+        total_tokens = 0
         try:
             stream = await self._client.chat.completions.create(
                 model=model,
@@ -162,15 +167,23 @@ class GroqClient:
                 ],
                 max_tokens=max_tokens,
                 temperature=0.1,
-                stream=True
+                stream=True,
+                stream_options={"include_usage": True},
             )
 
             async for chunk in stream:
                 if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
                     yield chunk.choices[0].delta.content
+                # Groq sends usage info on the final chunk when stream_options include_usage is set
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    total_tokens = chunk.usage.total_tokens
+
         except Exception as e:
             logger.error("groq_stream_failed", error=str(e))
             yield ""
+        finally:
+            # Always record token usage — fall back to max_tokens estimate if unavailable
+            self._increment_budget(total_tokens if total_tokens > 0 else max_tokens)
 
 
 # Singleton instance — reused across all agents

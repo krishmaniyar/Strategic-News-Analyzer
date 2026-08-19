@@ -147,10 +147,17 @@ elif settings.cors_origins:
 
 origins = list(set(origins))
 
+# L4 FIX: Previously used allow_origin_regex=r"https://.*\.vercel\.app" with
+# allow_credentials=True — this allows ANY site on Vercel to make credentialed
+# requests, which is a CSRF-like security risk.
+# Instead, require the production URL to be set explicitly via CORS_PRODUCTION_ORIGIN.
+cors_production_origin = settings.cors_origins  # type: ignore
+# The specific production Vercel URL should be added to cors_origins in .env
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    # No wildcard regex — set CORS_ORIGINS in env to include your exact Vercel URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

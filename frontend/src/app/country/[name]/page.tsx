@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { API_BASE_URL } from "@/lib/api"
-import { Globe, ArrowLeft, Clock, ExternalLink, Activity, Radio } from "lucide-react"
+import { Globe, ArrowLeft, Clock, ExternalLink, Radio } from "lucide-react"
 
 interface Article {
   id: string

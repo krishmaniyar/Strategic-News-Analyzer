@@ -20,30 +20,35 @@ class ArticleRepository:
         return result.scalar_one_or_none() is not None
 
     async def get_source_id_by_name(self, source_name: str) -> Optional[uuid.UUID]:
-        """Resolve a source ID by its name from the sources table."""
-        # Check standard sources (case-insensitive query)
-        stmt = select(Source.id).where(Source.name.ilike(source_name))
-        result = await self.db.execute(stmt)
-        source_id = result.scalar_one_or_none()
-
-        if source_id:
-            return source_id
-
-        # If source doesn't exist, create it dynamically
+        """Resolve or atomically create a source by name.
+        Uses INSERT ... ON CONFLICT to avoid TOCTOU race conditions under concurrent ingestion.
+        """
+        from sqlalchemy import text
+        # Atomically insert or ignore; then fetch the canonical ID.
+        new_id = str(uuid.uuid4())
         try:
-            new_source = Source(
-                id=uuid.uuid4(),
-                name=source_name,
-                credibility_score=0.7,
-                is_active=True
+            await self.db.execute(
+                text("""
+                    INSERT INTO sources (id, name, credibility_score, is_active)
+                    VALUES (:id, :name, 0.7, true)
+                    ON CONFLICT (name) DO NOTHING
+                """),
+                {"id": new_id, "name": source_name}
             )
-            self.db.add(new_source)
-            await self.db.flush()  # Obtain the generated ID without committing yet
-            logger.info("source_created_dynamically", source_name=source_name, source_id=new_source.id)
-            return new_source.id
+            await self.db.flush()
         except Exception as e:
-            logger.error("failed_to_create_source", source_name=source_name, error=str(e))
-            return None
+            logger.error("failed_to_upsert_source", source_name=source_name, error=str(e))
+
+        # Always fetch the authoritative ID (works whether INSERT ran or was skipped)
+        result = await self.db.execute(
+            text("SELECT id FROM sources WHERE name = :name"),
+            {"name": source_name}
+        )
+        row = result.fetchone()
+        if row:
+            logger.debug("source_resolved", source_name=source_name, source_id=row[0])
+            return row[0]
+        return None
 
     async def create_article(
         self,
@@ -91,27 +96,37 @@ class ArticleRepository:
         search: Optional[str] = None
     ) -> List[Article]:
         """Fetch articles from database sorted by publication date descending."""
+        from sqlalchemy import or_, exists as sa_exists
         stmt = select(Article).options(selectinload(Article.analysis))
         if processed_only is not None:
             stmt = stmt.where(Article.is_processed == processed_only)
-        
+
         if search:
-            from sqlalchemy import or_
             search_pattern = f"%{search}%"
-            stmt = stmt.join(Article.analysis, isouter=True).where(
+            # Use EXISTS subquery to avoid joining the same table that selectinload
+            # already joins, which would produce duplicate Article rows.
+            analysis_match = sa_exists().where(
+                ArticleAnalysis.article_id == Article.id,
+                ArticleAnalysis.summary.ilike(search_pattern)
+            )
+            stmt = stmt.where(
                 or_(
                     Article.title.ilike(search_pattern),
-                    ArticleAnalysis.summary.ilike(search_pattern)
+                    analysis_match
                 )
             )
 
         stmt = stmt.order_by(Article.published_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        # .unique() deduplicates ORM objects that may appear multiple times
+        # when selectinload performs its secondary SELECT.
+        return list(result.scalars().unique().all())
 
     async def get_unprocessed(self, limit: int = 50) -> List[Article]:
         """Fetch articles that are not yet marked as processed."""
-        stmt = select(Article).where(not Article.is_processed).limit(limit)
+        # FIX C2: `not Article.is_processed` is a Python boolean (always False).
+        # Must use SQLAlchemy column comparison.
+        stmt = select(Article).where(Article.is_processed == False).limit(limit)  # noqa: E712
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

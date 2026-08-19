@@ -290,12 +290,15 @@ async def get_risk_map(db: AsyncSession = Depends(get_db)):
 @router.get("/risk_map/articles")
 async def get_country_articles(
     country: str = Query(..., description="Country name to filter articles by"),
+    limit: int = Query(100, ge=1, le=500, description="Max articles to return per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Return all articles whose affected_regions matches the given country.
+    Return articles whose affected_regions matches the given country.
     Applies the same normalization so clicking 'United States of America' on
     the map also returns articles tagged with 'US', 'United States', etc.
+    Paginated via limit/offset to prevent DoS on high-traffic countries.
     """
     # Build reverse lookup: which raw region strings map to this country?
     matching_raw_regions: set[str] = set()
@@ -316,7 +319,6 @@ async def get_country_articles(
     matching_raw_regions.add(country.lower())
 
     # Query articles whose affected_regions array contains any matching region
-    # We use a lateral join approach: unnest each article's regions and check
     rows = await db.execute(text("""
         SELECT DISTINCT
             a.id, a.title, a.url, a.published_at, a.language,
@@ -330,7 +332,8 @@ async def get_country_articles(
           AND jsonb_array_length(aa.affected_regions) > 0
           AND LOWER(region) = ANY(:regions)
         ORDER BY a.published_at DESC
-    """), {"regions": list(matching_raw_regions)})
+        LIMIT :limit OFFSET :offset
+    """), {"regions": list(matching_raw_regions), "limit": limit, "offset": offset})
 
     articles = []
     for row in rows:
@@ -340,4 +343,11 @@ async def get_country_articles(
             d["published_at"] = d["published_at"].isoformat()
         articles.append(d)
 
-    return {"country": country, "article_count": len(articles), "articles": articles}
+    return {
+        "country": country,
+        "article_count": len(articles),
+        "articles": articles,
+        "limit": limit,
+        "offset": offset,
+    }
+

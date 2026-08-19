@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.core.logging import get_logger
 from app.ai.groq_client import groq_client
-from app.rag.query_engine import rag_query
+from app.ai.ollama_client import ollama_client
+from app.rag.retriever import hybrid_retrieve
 
 logger = get_logger(__name__)
 
@@ -38,10 +39,17 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
     if not event:
         return None
 
-    # Get RAG context
+    # Get RAG context directly via hybrid_retrieve to avoid a double Groq call.
+    # Previously rag_query() was called here, which internally called Groq a second time
+    # to summarize the retrieved chunks — doubling token cost per forecast.
     query = f"What are the recent developments and potential future actions regarding: {event.title}?"
-    rag_result = await rag_query(db, query)
-    rag_context = rag_result.get("answer", "")
+    q_embedding = await ollama_client.embed(query)
+    chunks = await hybrid_retrieve(db, query, q_embedding, top_k=5)
+    sources = [{"id": str(c['article_id']), "title": c['title'], "url": c['url']} for c in chunks]
+    rag_context = "\n\n---\n\n".join([
+        f"[{i+1}] {c['title']} ({c['published_at'].date() if c['published_at'] else 'Unknown date'}, {c['source_name']}):\n{c['chunk_text']}"
+        for i, c in enumerate(chunks)
+    ]) if chunks else "No recent context available."
 
     prompt = FORECAST_PROMPT.format(
         event_title=event.title,
@@ -82,7 +90,7 @@ async def generate_forecast(db: AsyncSession, event_id: str) -> dict | None:
     forecast_id = str(insert_res.scalar())
 
     # Optionally save evidence links
-    for source in rag_result.get("sources", []):
+    for source in sources:
         await db.execute(text("""
             INSERT INTO forecast_evidence (forecast_id, article_id)
             VALUES (:forecast_id, :article_id)

@@ -42,10 +42,11 @@ async def get_analytics_charts(db: AsyncSession = Depends(get_db)):
         })
 
     # 2. Monthly Trends (from ArticleAnalysis joined with Articles)
-    # Using Postgres TO_CHAR to get month abbreviation
+    # Group by YEAR + MONTH to avoid collapsing data across multiple calendar years.
     monthly_query = await db.execute(text("""
         SELECT 
-            TO_CHAR(a.published_at, 'Mon') as month,
+            TO_CHAR(a.published_at, 'Mon YY') as month,
+            EXTRACT(YEAR FROM a.published_at) as year_num,
             EXTRACT(MONTH FROM a.published_at) as month_num,
             COUNT(a.id) as articles,
             AVG(aa.strategic_score) as risk,
@@ -53,8 +54,8 @@ async def get_analytics_charts(db: AsyncSession = Depends(get_db)):
         FROM articles a
         JOIN article_analysis aa ON a.id = aa.article_id
         WHERE a.published_at IS NOT NULL
-        GROUP BY TO_CHAR(a.published_at, 'Mon'), EXTRACT(MONTH FROM a.published_at)
-        ORDER BY EXTRACT(MONTH FROM a.published_at) ASC
+        GROUP BY TO_CHAR(a.published_at, 'Mon YY'), EXTRACT(YEAR FROM a.published_at), EXTRACT(MONTH FROM a.published_at)
+        ORDER BY year_num ASC, month_num ASC
         LIMIT 12
     """))
     

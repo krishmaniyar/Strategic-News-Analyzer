@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { API_BASE_URL } from "@/lib/api"
 import { TrendingUp, RefreshCw, CheckCircle2, XCircle, Brain, Calendar, Shield, Gauge, BookOpen } from "lucide-react"
 
@@ -50,22 +50,24 @@ export default function ForecastPage() {
   const [resolvingId, setResolvingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
     try {
       const [fRes, sRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v2/forecasts/`),
+        fetch(`${API_BASE_URL}/api/v2/forecasts`),
         fetch(`${API_BASE_URL}/api/v2/forecasts/accuracy`)
       ])
-      if (fRes.ok && sRes.ok) {
-        setForecasts(await fRes.json())
-        setStats(await sRes.json())
-      } else { setError("Failed to load forecasting data.") }
+      // Handle each response independently so a stats failure doesn’t hide the forecasts list
+      if (fRes.ok) setForecasts(await fRes.json())
+      else setError("Failed to load forecasts list.")
+
+      if (sRes.ok) setStats(await sRes.json())
+      // Stats failure is non-fatal; forecasts list may still be shown
     } catch { setError("Could not connect to forecasting service.") }
     finally { setLoading(false) }
-  }
+  }, [])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const handleResolve = async (id: string, occurred: boolean) => {
     setResolvingId(id)
