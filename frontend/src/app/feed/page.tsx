@@ -1,7 +1,6 @@
 "use client"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { API_BASE_URL, WS_BASE_URL } from "@/lib/api"
-import { FetchNewsButton } from "@/components/feed/FetchNewsButton"
 import { Badge } from "@/components/ui/badge"
 import { Radio, RefreshCw, ExternalLink, AlertTriangle, Clock, Globe, Wifi, WifiOff, Filter } from "lucide-react"
 
@@ -100,28 +99,52 @@ export default function FeedPage() {
   const [articles, setArticles] = useState<Article[]>([])
   const [liveArticles, setLiveArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [wsStatus, setWsStatus] = useState<"connected" | "disconnected">("disconnected")
   const [filter, setFilter] = useState<RiskFilter>("All")
   const [showProcessed, setShowProcessed] = useState(true)
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
   const wsRef = useRef<WebSocket | null>(null)
+  const limit = 50
 
-  const fetchArticles = useCallback(async () => {
-    setLoading(true)
+  const fetchArticles = useCallback(async (pageNum: number, searchQuery: string, isLoadMore = false) => {
+    if (!isLoadMore) setLoading(true)
+    else setLoadingMore(true)
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=100`)
+      const offset = pageNum * limit
+      const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ""
+      const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=${limit}&offset=${offset}${searchParam}`)
       if (res.ok) {
         const data = await res.json()
-        setArticles(data.articles || [])
+        const newArticles = data.articles || []
+        
+        if (newArticles.length < limit) setHasMore(false)
+        else setHasMore(true)
+
+        if (isLoadMore) {
+          setArticles(prev => [...prev, ...newArticles])
+        } else {
+          setArticles(newArticles)
+          setLiveArticles([]) // reset live articles on new search
+        }
       }
     } catch (e) {
       console.error("Failed to fetch articles:", e)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchArticles()
+    setPage(0)
+    fetchArticles(0, search, false)
+  }, [search, fetchArticles])
+
+  useEffect(() => {
     // WebSocket for live feed
     const ws = new WebSocket(`${WS_BASE_URL}/ws/feed`)
     wsRef.current = ws
@@ -132,15 +155,21 @@ export default function FeedPage() {
       try {
         const data = JSON.parse(event.data)
         if (data.type === "new_article") {
-          setLiveArticles(prev => [data.data, ...prev.slice(0, 9)])
+          // Only add to live feed if there is no active search to prevent confusion
+          if (!search) {
+             setLiveArticles(prev => [data.data, ...prev.slice(0, 49)])
+          }
         }
       } catch {}
     }
     return () => ws.close()
-  }, [fetchArticles])
+  }, [search])
 
   const allArticles = [...liveArticles, ...articles]
-  const filtered = allArticles.filter(a => {
+  // Deduplicate by ID
+  const uniqueArticles = allArticles.filter((a, i, arr) => arr.findIndex(t => t.id === a.id) === i)
+  
+  const filtered = uniqueArticles.filter(a => {
     if (showProcessed && !a.is_processed && !a.analysis) return false
     if (filter === "All") return true
     return a.analysis?.risk_level === filter
@@ -165,7 +194,7 @@ export default function FeedPage() {
             Intelligence Feed
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            {loading ? "Loading..." : `${filtered.length.toLocaleString()} articles · Real-time geopolitical analysis`}
+            {loading ? "Loading..." : `${filtered.length.toLocaleString()} articles loaded · Real-time geopolitical analysis`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -177,33 +206,43 @@ export default function FeedPage() {
             {wsStatus === "connected" ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
             {wsStatus === "connected" ? "WS Live" : "WS Off"}
           </div>
-          <button onClick={fetchArticles} disabled={loading}
+          <button onClick={() => { setPage(0); fetchArticles(0, search, false) }} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-slate-400 hover:text-slate-200 bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.1] transition-all">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </button>
-          <FetchNewsButton compact />
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap fade-up fade-up-delay-1">
-        <Filter className="w-3.5 h-3.5 text-slate-600" />
-        <span className="text-[10px] font-mono text-slate-600 uppercase tracking-wider">Risk:</span>
-        {FILTERS.map(f => (
-          <button key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all
-              ${filter === f ? FILTER_COLORS[f] : "text-slate-600 bg-white/[0.02] border-white/[0.05] hover:border-white/[0.1] hover:text-slate-400"}`}>
-            {f}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+      {/* Filter and Search bar */}
+      <div className="flex flex-col md:flex-row md:items-center gap-4 fade-up fade-up-delay-1 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-600" />
+          <span className="text-[10px] font-mono text-slate-600 uppercase tracking-wider">Risk:</span>
+          {FILTERS.map(f => (
+            <button key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-all
+                ${filter === f ? FILTER_COLORS[f] : "text-slate-600 bg-white/[0.02] border-white/[0.05] hover:border-white/[0.1] hover:text-slate-400"}`}>
+              {f}
+            </button>
+          ))}
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer ml-2">
             <input type="checkbox" checked={showProcessed} onChange={e => setShowProcessed(e.target.checked)}
               className="accent-blue-500 w-3 h-3" />
             AI-analyzed only
           </label>
+        </div>
+        
+        <div className="md:ml-auto w-full md:w-64">
+          <input
+            type="text"
+            placeholder="Search intel feed..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#05070a] border border-white/[0.05] rounded-lg px-3 py-1.5 text-[12px] text-white
+              placeholder-slate-500 focus:outline-none focus:border-[#00f0ff]/50 focus:bg-[#00f0ff]/[0.02] transition-all"
+          />
         </div>
       </div>
 
@@ -217,19 +256,36 @@ export default function FeedPage() {
       ) : filtered.length === 0 ? (
         <div className="intel-card p-16 text-center">
           <Radio className="w-10 h-10 mx-auto text-slate-700 mb-3" />
-          <p className="text-slate-400 font-medium">No articles match the current filter</p>
-          <p className="text-slate-600 text-sm mt-1">Try changing the risk filter or fetching new articles</p>
+          <p className="text-slate-400 font-medium">No articles match the current filter or search</p>
+          <p className="text-slate-600 text-sm mt-1">Try changing the risk filter or search query</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map(article => (
-            <ArticleCard
-              key={article.id}
-              article={article}
-              isNew={liveArticles.some(la => la.id === article.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map(article => (
+              <ArticleCard
+                key={article.id}
+                article={article}
+                isNew={liveArticles.some(la => la.id === article.id)}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div className="flex justify-center mt-6">
+              <button 
+                onClick={() => {
+                  const nextPage = page + 1
+                  setPage(nextPage)
+                  fetchArticles(nextPage, search, true)
+                }}
+                disabled={loadingMore}
+                className="px-6 py-2 rounded-lg text-[13px] font-semibold text-[#00f0ff] border border-[#00f0ff]/30 bg-[#00f0ff]/5 hover:bg-[#00f0ff]/10 hover:shadow-[0_0_15px_rgba(0,240,255,0.15)] transition-all flex items-center gap-2"
+              >
+                {loadingMore ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Load More"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

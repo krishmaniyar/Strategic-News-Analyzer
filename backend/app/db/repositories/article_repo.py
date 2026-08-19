@@ -87,12 +87,24 @@ class ArticleRepository:
         self,
         limit: int = 50,
         offset: int = 0,
-        processed_only: Optional[bool] = None
+        processed_only: Optional[bool] = None,
+        search: Optional[str] = None
     ) -> List[Article]:
         """Fetch articles from database sorted by publication date descending."""
         stmt = select(Article).options(selectinload(Article.analysis))
         if processed_only is not None:
             stmt = stmt.where(Article.is_processed == processed_only)
+        
+        if search:
+            from sqlalchemy import or_
+            search_pattern = f"%{search}%"
+            stmt = stmt.join(Article.analysis, isouter=True).where(
+                or_(
+                    Article.title.ilike(search_pattern),
+                    ArticleAnalysis.summary.ilike(search_pattern)
+                )
+            )
+
         stmt = stmt.order_by(Article.published_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

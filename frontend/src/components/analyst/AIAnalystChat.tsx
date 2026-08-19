@@ -48,43 +48,16 @@ function parseCitationsAndStyles(text: string, isUser: boolean) {
   })
 }
 
-function extractAnswerText(content: string): string {
-  const trimmed = content.trim()
-  if (!trimmed.startsWith("{")) return content
-  const answerKeyIndex = trimmed.indexOf('"answer"')
-  if (answerKeyIndex === -1) return ""
-  const colonIndex = trimmed.indexOf(":", answerKeyIndex + 8)
-  if (colonIndex === -1) return ""
-  const quoteIndex = trimmed.indexOf('"', colonIndex + 1)
-  if (quoteIndex === -1) return ""
-  let result = ""
-  let isEscaped = false
-  for (let i = quoteIndex + 1; i < trimmed.length; i++) {
-    const char = trimmed[i]
-    if (isEscaped) {
-      if (char === "n") result += "\n"
-      else if (char === "t") result += "\t"
-      else result += char
-      isEscaped = false
-    } else if (char === "\\") {
-      isEscaped = true
-    } else if (char === '"') {
-      break
-    } else {
-      result += char
-    }
-  }
-  return result
-}
-
 function renderContent(content: string, isUser: boolean, isStreaming?: boolean) {
-  const cleanContent = isUser ? content : extractAnswerText(content)
+  let textToProcess = content.trim()
   let confidence: string | null = null
-  const confMatch = cleanContent.match(/\[Confidence:\s*(\w+)\]/i)
-  let textToProcess = cleanContent
-  if (confMatch) {
-    confidence = confMatch[1]
-    textToProcess = cleanContent.replace(/\[Confidence:\s*(\w+)\]/i, "").trim()
+  
+  if (!isUser) {
+    const confMatch = textToProcess.match(/\[Confidence:\s*(\w+)\]/i)
+    if (confMatch) {
+      confidence = confMatch[1]
+      textToProcess = textToProcess.replace(/\[Confidence:\s*(\w+)\]/i, "").trim()
+    }
   }
 
   const lines = textToProcess.split("\n")

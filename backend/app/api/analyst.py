@@ -25,8 +25,18 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
     """SSE Streaming RAG-powered query answering for analysts."""
     from app.rag.retriever import hybrid_retrieve
     from app.ai.ollama_client import ollama_client
-    from app.rag.query_engine import RAG_SYSTEM_PROMPT
     from app.ai.groq_client import groq_client
+    STREAMING_SYSTEM_PROMPT = """You are a geopolitical intelligence analyst with access to a
+curated database of recent news articles. Answer questions using ONLY the provided context.
+
+Rules:
+- Cite sources as [Source 1], [Source 2], etc.
+- If the context lacks sufficient information, say so explicitly — never fabricate
+- Be analytical: highlight causality, not just facts
+- If sources conflict, acknowledge the disagreement
+- End with: [Confidence: High/Medium/Low]
+
+IMPORTANT: Respond with pure text using markdown formatting. DO NOT wrap your response in JSON."""
 
     async def generate():
         try:
@@ -44,7 +54,7 @@ async def analyst_query_stream(request: QueryRequest, db: AsyncSession = Depends
 
             async for chunk in groq_client.stream_chat(
                 model="openai/gpt-oss-120b",
-                system=RAG_SYSTEM_PROMPT,
+                system=STREAMING_SYSTEM_PROMPT,
                 user=prompt,
                 max_tokens=1000
             ):

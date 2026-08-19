@@ -1,10 +1,9 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { API_BASE_URL } from "@/lib/api"
 import { GlobalRiskMap } from "@/components/maps/GlobalRiskMap"
-import { CountryArticlePanel } from "@/components/maps/CountryArticlePanel"
 import { AIAnalystChat } from "@/components/analyst/AIAnalystChat"
-import { FetchNewsButton } from "@/components/feed/FetchNewsButton"
 import { Globe, AlertTriangle, TrendingDown, BarChart3, Loader2, ShieldAlert, Activity } from "lucide-react"
 
 interface CountryRiskData {
@@ -61,6 +60,7 @@ function StatCard({ icon, label, value, sub, color = "blue", delay = "0s", loadi
 }
 
 export default function Home() {
+  const router = useRouter()
   const [riskData, setRiskData] = useState<Record<string, CountryRiskData>>({})
   const [analyticsStats, setAnalyticsStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -116,15 +116,10 @@ export default function Home() {
   }, [latestArticles])
 
   const handleCountryClick = useCallback((countryName: string, data: CountryRiskData | null) => {
-    setSelectedCountry(countryName)
-    setSelectedRiskData(data)
-    setPanelOpen(true)
-  }, [])
-
-  const handlePanelClose = useCallback(() => {
-    setPanelOpen(false)
-    setTimeout(() => { setSelectedCountry(null); setSelectedRiskData(null) }, 300)
-  }, [])
+    if (data && data.article_count > 0) {
+      router.push(`/country/${encodeURIComponent(countryName)}`)
+    }
+  }, [router])
 
   const totalCountries = Object.keys(riskData).length
   const criticalCount = Object.values(riskData).filter(d => d.risk === "Critical").length
@@ -157,7 +152,6 @@ export default function Home() {
             {loading ? "Loading intelligence..." : `Monitoring ${totalCountries} countries · ${totalArticles.toLocaleString()} articles analyzed`}
           </p>
         </div>
-        <FetchNewsButton compact />
       </div>
 
       {/* KPI stat row */}
@@ -226,14 +220,6 @@ export default function Home() {
           <AIAnalystChat />
         </div>
       </div>
-
-      {/* Country article panel (slide-in) */}
-      <CountryArticlePanel
-        country={selectedCountry || ""}
-        riskData={selectedRiskData}
-        isOpen={panelOpen}
-        onClose={handlePanelClose}
-      />
     </div>
   )
 }

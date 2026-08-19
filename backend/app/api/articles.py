@@ -11,11 +11,12 @@ async def list_articles(
     limit: int = Query(100, ge=1),
     offset: int = Query(0, ge=0),
     processed_only: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Retrieve ingested news articles sorted by publication date descending."""
     repo = ArticleRepository(db)
-    articles_list = await repo.get_articles(limit=limit, offset=offset, processed_only=processed_only)
+    articles_list = await repo.get_articles(limit=limit, offset=offset, processed_only=processed_only, search=search)
 
     # Format database models as simple JSON dicts
     results = []
