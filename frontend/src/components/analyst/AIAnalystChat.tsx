@@ -48,8 +48,25 @@ function parseCitationsAndStyles(text: string, isUser: boolean) {
   })
 }
 
+function extractAnswerText(content: string): string {
+  const trimmed = content.trim()
+  if (!trimmed.startsWith("{")) return content
+  
+  const match = content.match(/"answer"\s*:\s*"([\s\S]*)/)
+  if (match) {
+    let result = match[1]
+    // Remove trailing quote and closing brace if they exist at the very end
+    result = result.replace(/"\s*}\s*$/, "")
+    // Unescape common JSON escapes just in case the LLM used them
+    result = result.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\")
+    return result
+  }
+  return content
+}
+
 function renderContent(content: string, isUser: boolean, isStreaming?: boolean) {
-  let textToProcess = content.trim()
+  const cleanContent = isUser ? content : extractAnswerText(content)
+  let textToProcess = cleanContent.trim()
   let confidence: string | null = null
   
   if (!isUser) {
