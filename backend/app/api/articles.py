@@ -17,6 +17,7 @@ async def list_articles(
     """Retrieve ingested news articles sorted by publication date descending."""
     repo = ArticleRepository(db)
     articles_list = await repo.get_articles(limit=limit, offset=offset, processed_only=processed_only, search=search)
+    total_count = await repo.count_articles(processed_only=processed_only, search=search)
 
     # Format database models as simple JSON dicts
     results = []
@@ -51,8 +52,10 @@ async def list_articles(
         })
 
     return {
+        "total": total_count,
         "count": len(results),
         "limit": limit,
         "offset": offset,
+        "has_more": offset + len(results) < total_count,
         "articles": results
     }

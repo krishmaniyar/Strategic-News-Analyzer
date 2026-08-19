@@ -122,6 +122,34 @@ class ArticleRepository:
         # when selectinload performs its secondary SELECT.
         return list(result.scalars().unique().all())
 
+    async def count_articles(
+        self,
+        processed_only: Optional[bool] = None,
+        search: Optional[str] = None
+    ) -> int:
+        """Count total articles matching the given criteria."""
+        from sqlalchemy import func, or_, exists as sa_exists
+        stmt = select(func.count(Article.id))
+        
+        if processed_only is not None:
+            stmt = stmt.where(Article.is_processed == processed_only)
+
+        if search:
+            search_pattern = f"%{search}%"
+            analysis_match = sa_exists().where(
+                ArticleAnalysis.article_id == Article.id,
+                ArticleAnalysis.summary.ilike(search_pattern)
+            )
+            stmt = stmt.where(
+                or_(
+                    Article.title.ilike(search_pattern),
+                    analysis_match
+                )
+            )
+        
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+
     async def get_unprocessed(self, limit: int = 50) -> List[Article]:
         """Fetch articles that are not yet marked as processed."""
         # FIX C2: `not Article.is_processed` is a Python boolean (always False).

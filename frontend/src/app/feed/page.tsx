@@ -122,8 +122,11 @@ export default function FeedPage() {
         const data = await res.json()
         const newArticles = data.articles || []
         
-        if (newArticles.length < limit) setHasMore(false)
-        else setHasMore(true)
+        if (typeof data.has_more === "boolean") {
+          setHasMore(data.has_more)
+        } else {
+          setHasMore(newArticles.length >= limit)
+        }
 
         if (isLoadMore) {
           setArticles(prev => [...prev, ...newArticles])
