@@ -99,7 +99,8 @@ export default function Home() {
         const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=20`)
         if (res.ok) {
           const data = await res.json()
-          setLatestArticles(data.articles?.map((a: any) => ({ title: a.title, url: a.url })) || [])
+          const articlesArray = Array.isArray(data) ? data : (data.articles || [])
+          setLatestArticles(articlesArray.map((a: any) => ({ title: a.title, url: a.url })))
         }
       } catch {}
     }

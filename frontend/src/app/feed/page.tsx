@@ -120,7 +120,7 @@ export default function FeedPage() {
       const res = await fetch(`${API_BASE_URL}/api/v2/articles?limit=${limit}&offset=${offset}${searchParam}`)
       if (res.ok) {
         const data = await res.json()
-        const newArticles = data.articles || []
+        const newArticles = Array.isArray(data) ? data : (data.articles || [])
         
         if (typeof data.has_more === "boolean") {
           setHasMore(data.has_more)

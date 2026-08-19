@@ -236,3 +236,51 @@ CREATE TABLE IF NOT EXISTS token_usage_log (
 );
 CREATE INDEX IF NOT EXISTS token_usage_log_run_date_idx ON token_usage_log (run_date DESC);
 
+-- Migration 013: Expanded Row-Level Security for Public Intelligence Data
+-- By default, all unauthenticated and authenticated users can READ (SELECT) intelligence data.
+-- Only the backend service (using SERVICE_ROLE or direct Postgres connection) can INSERT/UPDATE/DELETE.
+
+ALTER TABLE public.sources ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sources_select_all" ON public.sources;
+CREATE POLICY "sources_select_all" ON public.sources FOR SELECT USING (true);
+
+ALTER TABLE public.article_analysis ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "article_analysis_select_all" ON public.article_analysis;
+CREATE POLICY "article_analysis_select_all" ON public.article_analysis FOR SELECT USING (true);
+
+ALTER TABLE public.article_embeddings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "article_embeddings_select_all" ON public.article_embeddings;
+CREATE POLICY "article_embeddings_select_all" ON public.article_embeddings FOR SELECT USING (true);
+
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "events_select_all" ON public.events;
+CREATE POLICY "events_select_all" ON public.events FOR SELECT USING (true);
+
+ALTER TABLE public.event_articles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "event_articles_select_all" ON public.event_articles;
+CREATE POLICY "event_articles_select_all" ON public.event_articles FOR SELECT USING (true);
+
+ALTER TABLE public.entities ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "entities_select_all" ON public.entities;
+CREATE POLICY "entities_select_all" ON public.entities FOR SELECT USING (true);
+
+ALTER TABLE public.entity_relations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "entity_relations_select_all" ON public.entity_relations;
+CREATE POLICY "entity_relations_select_all" ON public.entity_relations FOR SELECT USING (true);
+
+ALTER TABLE public.entity_embeddings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "entity_embeddings_select_all" ON public.entity_embeddings;
+CREATE POLICY "entity_embeddings_select_all" ON public.entity_embeddings FOR SELECT USING (true);
+
+ALTER TABLE public.forecasts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "forecasts_select_all" ON public.forecasts;
+CREATE POLICY "forecasts_select_all" ON public.forecasts FOR SELECT USING (true);
+
+ALTER TABLE public.forecast_evidence ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "forecast_evidence_select_all" ON public.forecast_evidence;
+CREATE POLICY "forecast_evidence_select_all" ON public.forecast_evidence FOR SELECT USING (true);
+
+ALTER TABLE public.token_usage_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "token_usage_log_select_all" ON public.token_usage_log;
+CREATE POLICY "token_usage_log_select_all" ON public.token_usage_log FOR SELECT USING (true);
+

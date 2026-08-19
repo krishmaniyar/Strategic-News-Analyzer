@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛡️ Strategic News Analyzer
+# 🛡️ Strategic News Analyzer (SNA)
 
 **AI-Powered Geopolitical Intelligence Platform**
 
@@ -23,6 +23,7 @@ An enterprise-grade platform that continuously ingests global news from multiple
 - [Project Overview](#project-overview)
 - [Architecture Overview](#architecture-overview)
 - [System Design Diagrams](#system-design-diagrams)
+- [How the System Works (Deep Dive)](#how-the-system-works-deep-dive)
 - [Installation & Setup](#installation--setup)
 - [Usage](#usage)
 - [API Endpoints](#api-endpoints)
@@ -40,14 +41,7 @@ An enterprise-grade platform that continuously ingests global news from multiple
 
 **Strategic News Analyzer (SNA)** is a full-stack geopolitical intelligence platform designed for analysts, researchers, and decision-makers who need to monitor, understand, and forecast global events in real-time.
 
-### Objectives
-
-- **Automated Intelligence Collection** — Continuously ingest articles from 5+ news APIs and RSS feeds with built-in deduplication
-- **Multi-Dimensional AI Analysis** — Sentiment analysis, media bias detection, strategic risk scoring, and automatic translation of non-English articles
-- **Knowledge Graph Construction** — Extract named entities (people, countries, organizations, treaties) and their relationships to build a living knowledge graph
-- **Event Detection** — Cluster related articles into coherent geopolitical events using HDBSCAN density-based clustering on vector embeddings
-- **Intelligence Forecasting** — Generate falsifiable predictions with confidence scores using RAG-augmented LLM reasoning over historical context
-- **Interactive Risk Dashboard** — D3.js-powered global risk map with country-level drill-down, real-time WebSocket article feed, and an AI analyst chat interface
+It bridges the gap between raw unstructured news data and structured, actionable geopolitical intelligence by utilizing Large Language Models (LLMs) and advanced data science techniques.
 
 ### Key Features
 
@@ -165,8 +159,6 @@ graph TB
     Backend --> Flower
 ```
 
-**Explanation:** The package diagram shows the two main deployment units (Frontend & Backend) with their internal module dependencies. The Frontend communicates with the Backend via REST/WebSocket. The Backend's AI Agents, Ingestion Engine, and RAG Engine all share the AI Providers layer (Groq + Ollama) and the Database layer (Supabase PostgreSQL with pgvector). Redis serves as the Celery broker and token budget store.
-
 ---
 
 ## System Design Diagrams
@@ -202,10 +194,6 @@ flowchart TD
     G --> C
     C -- All done --> U([Pipeline Complete<br>Log Duration and Stats])
 ```
-
-**Explanation:** This activity diagram traces the complete lifecycle of a news article from ingestion to dashboard. The Celery Beat scheduler triggers the pipeline every 15 minutes. Each of the 5 source adapters is processed sequentially, while the AI analysis tasks (sentiment, bias, summarization) run in parallel via `asyncio.gather()`. The pipeline includes hash-based deduplication, automatic language detection and translation, vector embedding generation, and real-time WebSocket broadcast.
-
----
 
 ### Use Case Diagram
 
@@ -253,10 +241,6 @@ flowchart LR
     System --> UC12
 ```
 
-**Explanation:** Three actor types interact with the platform. **Analysts** consume intelligence through the dashboard, risk map, AI chat, and forecasts. **Admins** manage system operations including manual ingestion triggers and Prometheus/Flower monitoring. The **Automated System** (Celery Beat + Workers) handles scheduled ingestion, event clustering, and forecast generation without human intervention.
-
----
-
 ### Sequence Diagram — RAG Analyst Query Flow
 
 ```mermaid
@@ -289,10 +273,6 @@ sequenceDiagram
     API-->>FE: data: {"type":"done","sources":[...]}
     FE-->>User: Rendered answer with source citations
 ```
-
-**Explanation:** When an analyst submits a question, the system performs hybrid retrieval combining vector similarity search (pgvector HNSW index) with PostgreSQL full-text search. Results are fused using Reciprocal Rank Fusion (RRF) to select the top-5 most relevant article chunks. These chunks are injected into the LLM prompt alongside the analyst's question. The response streams back via Server-Sent Events (SSE) for a responsive chat experience.
-
----
 
 ### Class Diagram — Core Domain Models
 
@@ -402,7 +382,56 @@ classDiagram
     Forecast "*" --> "*" Article : cites as evidence
 ```
 
-**Explanation:** The class diagram models the core domain. `Source` → `Article` represents multi-source ingestion. Each `Article` has exactly one `ArticleAnalysis` (sentiment, bias, risk) and multiple `ArticleEmbedding` chunks (768-dim vectors for RAG). `Entity` and `EntityRelation` form the knowledge graph. `Event` clusters multiple articles via HDBSCAN, and each event can generate `Forecast` predictions grounded in cited article evidence.
+---
+
+## How the System Works (Deep Dive)
+
+This section explains the inner workings of every major feature in the platform.
+
+### 1. Data Ingestion Pipeline
+The ingestion engine is the heartbeat of the platform. It runs on a cron schedule via Celery Beat (e.g., every 15 minutes).
+- **Adapters:** The system implements a Strategy pattern with a `BaseSourceAdapter`. Specific adapters exist for NewsAPI, GNews, MediaStack, RSS (BBC, Al Jazeera, etc.), and GDELT.
+- **Normalization:** Each adapter normalizes raw JSON/XML into a standard `RawArticle` dataclass.
+- **Deduplication:** Before saving to the database, the system calculates a SHA-256 hash of the article's URL and title. If the hash exists in the database, the article is skipped (O(1) duplicate check).
+- **Source Creation:** If an article comes from an unknown publisher, the database uses an atomic `INSERT ... ON CONFLICT DO NOTHING` to safely register the new source without TOCTOU race conditions.
+
+### 2. Multi-Stage AI Analysis
+Once articles are stored in the database as `is_processed = False`, the Analysis Agent picks them up.
+- **Language Detection & Translation:** If an article is not in English, it is routed to the LLM for translation to ensure the knowledge graph operates on a unified language base.
+- **Parallel Processing:** To minimize latency, the agent requests multiple analyses in parallel (e.g., Sentiment, Bias, Summarization) via `asyncio.gather`.
+- **Structured JSON Enforcement:** All LLM prompts use strict schemas and `response_format={"type": "json_object"}` to guarantee the output can be parsed into backend databases.
+- **Strategic Scoring:** An algorithmic aggregation of the LLM's sentiment score, bias severity, and identified risk flags produces a unified `strategic_score` (1-100) and `risk_level` (Low, Medium, High, Critical).
+
+### 3. Entity Extraction & Knowledge Graph
+To build a web of geopolitical context, the Entity Agent processes the summaries generated by the Analysis Agent.
+- **Extraction:** The LLM is prompted to identify Named Entities (People, Nations, Organizations) and explicitly define the relationship verb between them (e.g., "USA" -> `sanctions` -> "Iran").
+- **Upsertion:** Entities are merged into the `entities` table, tracking their global mention count. Relations are stored in `entity_relations`.
+- **Frontend Graph:** The Next.js frontend queries this data to render interactive force-directed graphs (using D3 or equivalent libraries), allowing analysts to visually map alliances and conflicts.
+
+### 4. Event Clustering (HDBSCAN)
+Individual articles are often part of a larger ongoing event. SNA automatically discovers these events.
+- **Vectorization:** Every article's text is chunked and embedded into a 768-dimensional vector using local Ollama (`nomic-embed-text`).
+- **Clustering Algorithm:** The Clustering Agent pulls recent article vectors and runs **HDBSCAN** (Hierarchical Density-Based Spatial Clustering of Applications with Noise) using Cosine distance.
+- **Why HDBSCAN?** Unlike K-Means, HDBSCAN does not require you to know the number of clusters in advance, and it successfully identifies "noise" (isolated articles that don't belong to a major event).
+- **Event Synthesis:** Once a cluster of articles is identified, their combined summaries are sent to Groq to generate a holistic "Event Title", "Event Description", and aggregated "Risk Level".
+
+### 5. Forecasting Engine
+SNA acts as a predictive analyst by forecasting the outcome of active events.
+- **Context Gathering:** When an event is passed to the Forecasting Agent, the system queries the RAG engine for the most recent developments related to that event.
+- **Prediction Generation:** The LLM acts under a strict persona to output a specific, falsifiable prediction (e.g., "China will impose tariffs within 30 days"), a confidence score (0.0 - 1.0), and a Chain of Thought.
+- **Calibration (Brier Score):** Over time, as outcomes resolve (either manually toggled by admins or automatically via future agents), the system calculates Brier scores to measure the calibration and accuracy of the AI's predictions.
+
+### 6. RAG Engine & AI Analyst
+Analysts can chat with the platform to ask specific questions (e.g., "What is the current status of the Taiwan Strait?").
+- **Hybrid Retrieval (RRF):** SNA does not rely solely on vector search. It executes both a Vector Similarity Search (using pgvector) and a Full-Text Search (using PostgreSQL `tsvector`). The results are merged using **Reciprocal Rank Fusion (RRF)**: `Score = 1/(k + rank_vector) + 1/(k + rank_fts)`. This guarantees high recall for exact keywords *and* semantic concepts.
+- **Prompt Isolation:** To prevent Prompt Injection attacks (where a malicious news article contains instructions that override the system prompt), retrieved text is enclosed in strict XML-style delimiters (`<source>...</source>`).
+- **Streaming:** The Groq API response is streamed back to the Next.js frontend using Server-Sent Events (SSE). The frontend UI accumulates the markdown chunks in real-time, providing a fast, ChatGPT-like experience.
+
+### 7. Frontend Architecture & Real-Time Feed
+- **Server/Client Separation:** The root layout (`layout.tsx`) is a Next.js Server Component responsible for SEO metadata and initial HTML delivery. All interactive elements (Sidebar, Clock, State) are isolated in a `ClientLayout.tsx` shell.
+- **Live Feed (WebSockets):** The FastAPI backend maintains an active `ConnectionManager`. The moment an article finishes the AI analysis pipeline, it is broadcasted over the `/ws/feed` WebSocket.
+- **State Efficiency:** The frontend `feed/page.tsx` deduplicates incoming WebSocket articles in `O(n)` time using a JavaScript `Map`, preventing UI stuttering under heavy load. A `searchRef` is used to pause the live feed if the user is actively searching the archives.
+- **Risk Map:** A TopoJSON-based map of the world dynamically colors countries based on the aggregated `strategic_score` of recent articles tagged with that country's name.
 
 ---
 
@@ -465,22 +494,12 @@ Run the migrations against your Supabase PostgreSQL instance:
 psql $DATABASE_URL -f backend/migrations.sql
 ```
 
-Or use the provided migration script:
-
-```bash
-cd backend
-python apply_migrations.py
-```
-
 #### 4. Install & Start Ollama
 
 ```bash
 # Install Ollama (https://ollama.ai)
 # Pull the embedding model
 ollama pull nomic-embed-text
-
-# Optional: Pull a local LLM for fallback
-ollama pull qwen2.5:7b
 ```
 
 #### 5. Set Up the Backend
@@ -495,9 +514,6 @@ venv\Scripts\activate       # Windows
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Verify setup
-python verify_setup.py
 ```
 
 #### 6. Set Up the Frontend
@@ -532,47 +548,27 @@ redis-server
 ### Running the Development Stack
 
 **Terminal 1 — FastAPI Backend:**
-
 ```bash
 cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Terminal 2 — Celery Worker:**
-
 ```bash
 cd backend
 celery -A app.core.celery_app worker --loglevel=info --concurrency=4
 ```
 
 **Terminal 3 — Celery Beat (Scheduler):**
-
 ```bash
 cd backend
 celery -A app.core.celery_app beat --loglevel=info
 ```
 
 **Terminal 4 — Next.js Frontend:**
-
 ```bash
 cd frontend
 npm run dev
-```
-
-**Terminal 5 — Flower (Optional — Task Monitoring):**
-
-```bash
-celery -A app.core.celery_app flower --port=5555
-```
-
-### Running with Docker Compose
-
-```bash
-# Development (with hot-reload and volume mounts)
-docker-compose -f docker-compose.dev.yml up --build
-
-# Production
-docker-compose up --build -d
 ```
 
 ### Access Points
@@ -585,29 +581,6 @@ docker-compose up --build -d
 | Prometheus Metrics | http://localhost:8000/metrics |
 | Flower Dashboard | http://localhost:5555 |
 | Health Check | http://localhost:8000/health |
-
-### Trigger Manual News Ingestion
-
-```bash
-# Via the API
-curl -X POST http://localhost:8000/api/v2/admin/ingest
-
-# Or from the frontend — click the "Fetch News" button on the dashboard
-```
-
-### Query the AI Analyst
-
-```bash
-# Non-streaming
-curl -X POST http://localhost:8000/api/v2/analyst/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What are the latest developments in US-China semiconductor tensions?"}'
-
-# Streaming (SSE)
-curl -N -X POST http://localhost:8000/api/v2/analyst/query_stream \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Analyze the current risk landscape in Eastern Europe"}'
-```
 
 ---
 
@@ -648,99 +621,27 @@ Filter timing logs in production:
 ```bash
 # Extract pipeline durations
 cat logs/app.log | jq 'select(.event == "ingestion_pipeline_run_complete") | .stats.duration_seconds'
-
-# In development (colored console), grep for duration
-uvicorn app.main:app --reload 2>&1 | grep "duration_seconds"
-```
-
-### Displaying Execution Time to the User
-
-The ingestion API response includes `duration_seconds`:
-
-```json
-{
-  "total_fetched": 45,
-  "total_inserted": 28,
-  "total_duplicates": 15,
-  "total_errors": 2,
-  "duration_seconds": 42.71,
-  "sources": { "NewsAPI": {...}, "GDELT": {...} }
-}
-```
-
-### Adding Custom Timing to Any Query
-
-Wrap any operation with a high-resolution timer:
-
-```python
-import time
-from app.core.logging import get_logger
-
-logger = get_logger(__name__)
-
-async def timed_operation():
-    start = time.perf_counter()
-
-    # --- Your operation here ---
-    result = await rag_query(db, question)
-    # ---------------------------
-
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info("query_completed", duration_ms=round(elapsed_ms, 2))
-
-    return {**result, "execution_time_ms": round(elapsed_ms, 2)}
-```
-
-### FastAPI Middleware for Per-Request Timing
-
-Add global timing to every API request:
-
-```python
-import time
-from fastapi import Request
-
-@app.middleware("http")
-async def add_timing_header(request: Request, call_next):
-    start = time.perf_counter()
-    response = await call_next(request)
-    duration_ms = (time.perf_counter() - start) * 1000
-    response.headers["X-Process-Time-Ms"] = f"{duration_ms:.2f}"
-    return response
 ```
 
 ### Prometheus Histogram for Latency Distribution
 
-The system already tracks AI pipeline latency via Prometheus histograms defined in `backend/app/core/metrics.py`:
+The system tracks AI pipeline latency via Prometheus histograms defined in `backend/app/core/metrics.py`:
 
 ```python
 from app.core.metrics import analysis_latency
 
 with analysis_latency.time():
-    # Any code block — automatically records duration into histogram buckets
     result = await analyze_article(article, repo)
-
-# Query in Prometheus/Grafana:
-# histogram_quantile(0.95, rate(article_analysis_seconds_bucket[5m]))
 ```
 
-### Frontend Timing Example (React)
-
-```typescript
-const fetchWithTiming = async (url: string) => {
-  const start = performance.now();
-  const res = await fetch(url);
-  const data = await res.json();
-  const elapsed = performance.now() - start;
-  console.log(`[Timing] ${url} → ${elapsed.toFixed(0)}ms`);
-  return { ...data, _clientTimeMs: elapsed };
-};
-```
+Query in Prometheus/Grafana:
+`histogram_quantile(0.95, rate(article_analysis_seconds_bucket[5m]))`
 
 ---
 
 ## Project Structure
 
-```
+```text
 Strategic-News-Analyzer/
 ├── backend/                         # FastAPI backend service
 │   ├── app/
@@ -756,150 +657,50 @@ Strategic-News-Analyzer/
 │   │   │   ├── ollama_client.py     # Ollama embedding & generation client
 │   │   │   └── model_router.py      # Task-type → model+provider routing table
 │   │   ├── api/                     # FastAPI route handlers
-│   │   │   ├── admin.py             # Admin endpoints (trigger ingestion)
-│   │   │   ├── analyst.py           # RAG Q&A and streaming SSE endpoints
-│   │   │   ├── articles.py          # Article CRUD and listing
-│   │   │   ├── auth.py              # Supabase JWT authentication
-│   │   │   ├── entities.py          # Knowledge graph entity endpoints
-│   │   │   ├── events.py            # Geopolitical event endpoints
-│   │   │   ├── feed.py              # WebSocket live feed + ConnectionManager
-│   │   │   ├── forecasts.py         # Forecast listing and generation
-│   │   │   └── risk_map.py          # Per-country risk aggregation + normalization
-│   │   ├── core/                    # Framework configuration
-│   │   │   ├── celery_app.py        # Celery configuration and beat schedule
-│   │   │   ├── config.py            # Pydantic Settings with env validation
-│   │   │   ├── database.py          # SQLAlchemy async session factory
-│   │   │   ├── logging.py           # Structlog setup (dev console / prod JSON)
-│   │   │   ├── metrics.py           # Prometheus counters, histograms, gauges
-│   │   │   └── security.py          # Supabase JWT token verification
-│   │   ├── db/                      # Database layer
-│   │   │   ├── models.py            # SQLAlchemy ORM models (9 tables)
-│   │   │   └── repositories/        # Data access repositories
-│   │   ├── ingestion/               # News ingestion pipeline
-│   │   │   ├── base.py              # BaseSourceAdapter ABC + RawArticle dataclass
-│   │   │   ├── coordinator.py       # Pipeline orchestrator (fetch → analyze → store)
-│   │   │   ├── deduplicator.py      # SHA-256 hash-based duplicate detection
-│   │   │   └── adapters/            # Source-specific API adapters
-│   │   │       ├── newsapi.py       # NewsAPI.org adapter
-│   │   │       ├── gnews.py         # GNews.io adapter
-│   │   │       ├── mediastack.py    # MediaStack adapter
-│   │   │       ├── rss.py           # RSS feed adapter (BBC, Reuters, Al Jazeera)
-│   │   │       └── gdelt.py         # GDELT Project adapter
-│   │   └── rag/                     # Retrieval-Augmented Generation
-│   │       ├── retriever.py         # Hybrid retrieval (vector + FTS + RRF)
-│   │       └── query_engine.py      # RAG prompt construction & LLM generation
+│   │   ├── core/                    # Celery Setup, DB connections, Logging, Config
+│   │   ├── db/                      # SQLAlchemy Models and Repositories
+│   │   ├── ingestion/               # News ingestion pipeline and adapters
+│   │   └── rag/                     # Hybrid Retrieval and Prompt Engine
 │   ├── migrations.sql               # Complete database schema (11 migrations)
-│   ├── requirements.txt             # Python dependencies
-│   ├── Dockerfile                   # Production Docker image
-│   ├── test_api.py                  # API integration tests
-│   └── test_ingestion.py            # Ingestion pipeline tests
+│   └── requirements.txt             # Python dependencies
 │
 ├── frontend/                        # Next.js 16 frontend
 │   ├── src/
 │   │   ├── app/                     # Next.js App Router pages
 │   │   │   ├── page.tsx             # Dashboard — risk map + summary stats + AI chat
-│   │   │   ├── layout.tsx           # Root layout with sidebar navigation
-│   │   │   ├── globals.css          # Global styles and design tokens
+│   │   │   ├── layout.tsx           # Root layout with Server Components
 │   │   │   ├── feed/                # Live news feed page
 │   │   │   ├── events/              # Event clusters page
 │   │   │   ├── entities/            # Knowledge graph visualization
 │   │   │   ├── forecast/            # Intelligence forecasts page
 │   │   │   ├── analyst/             # AI analyst full-page interface
-│   │   │   ├── analytics/           # Analytics dashboard page
-│   │   │   └── api/ingest/          # Next.js API route for frontend ingestion
-│   │   ├── components/              # Reusable React components
-│   │   │   ├── analyst/             # AIAnalystChat component
-│   │   │   ├── entities/            # Entity graph visualization
-│   │   │   ├── feed/                # FetchNewsButton, article cards
-│   │   │   ├── maps/                # GlobalRiskMap (D3/TopoJSON), CountryArticlePanel
-│   │   │   └── ui/                  # Shared UI primitives (Card, Button, etc.)
-│   │   ├── lib/                     # Utility libraries
-│   │   │   ├── groq.ts              # Frontend Groq client for direct analysis
-│   │   │   ├── pipeline.ts          # Client-side analysis pipeline
-│   │   │   ├── news-fetchers.ts     # Multi-source news fetching utilities
-│   │   │   ├── supabase-server.ts   # Supabase client initialization
-│   │   │   └── utils.ts             # General utilities (cn, etc.)
-│   │   ├── store/                   # Zustand state management
-│   │   │   └── realtime.ts          # WebSocket realtime store
-│   │   └── types/                   # TypeScript type definitions
-│   │       └── index.ts             # Article, Entity, Event, Forecast interfaces
-│   ├── package.json                 # Node.js dependencies
-│   ├── vercel.json                  # Vercel deployment configuration
-│   ├── tsconfig.json                # TypeScript configuration
-│   └── components.json              # shadcn/ui component configuration
+│   │   │   └── analytics/           # Analytics dashboard page
+│   │   ├── components/              # Reusable React components (Charts, Maps, Cards)
+│   │   │   └── ClientLayout.tsx     # Client-side shell for context and state providers
+│   │   ├── lib/                     # Utilities (API config, WebSockets, Supabase)
+│   │   └── store/                   # Zustand state management
+│   ├── package.json
+│   └── tailwind.config.ts           # Tailwind custom glassmorphism design system
 │
-├── docker-compose.yml               # Production: backend + worker + beat + redis + flower
-├── docker-compose.dev.yml           # Development: with hot-reload volumes
-├── railway.toml                     # Railway deployment configuration
-├── .env.example                     # Environment variable template
-└── LICENSE                          # MIT License
+├── docker-compose.yml               # Production container stack
+└── README.md                        # You are here!
 ```
 
 ---
 
 ## Configuration & Hyperparameters
 
-### Environment Configuration
-
-| Name | Description | Default | Type | Options / Range |
-|------|-------------|---------|------|-----------------|
-| `ENVIRONMENT` | Runtime environment mode | `development` | `String` | `development`, `production` |
-| `LOG_LEVEL` | Logging verbosity | `INFO` | `String` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `SUPABASE_URL` | Supabase project URL | — | `String` | Required |
-| `SUPABASE_ANON_KEY` | Supabase anonymous API key | — | `String` | Required |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | — | `String` | Required |
-| `DATABASE_URL` | PostgreSQL connection string | — | `String` | Required |
-| `GROQ_API_KEY` | Groq API authentication key | — | `String` | Required |
-| `GROQ_DAILY_TOKEN_BUDGET` | Maximum tokens per day for Groq | `500000` | `Integer` | `100000`–`5000000` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` | `String` | Valid Redis URI |
-| `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` | `String` | Valid HTTP URL |
-| `MEDIASTACK_API_KEY` | MediaStack news API key | — | `String` | Optional |
-| `NEWSAPI_KEY` | NewsAPI.org API key | — | `String` | Optional |
-| `GNEWS_KEY` | GNews.io API key | — | `String` | Optional |
-| `GDELT_ENABLED` | Enable GDELT data source | `true` | `Boolean` | `true`, `false` |
-| `CORS_ORIGINS` | Allowed CORS origins | `["localhost:5173","localhost:3000"]` | `List[String]` | Comma-separated or JSON array |
-
 ### AI Pipeline Hyperparameters
 
 | Name | Description | Default | Type | Range |
 |------|-------------|---------|------|-------|
 | `INGESTION_INTERVAL_MINUTES` | Celery Beat ingestion schedule | `15` | `Integer` | `5`–`60` |
-| `CLUSTERING_INTERVAL_MINUTES` | Event clustering schedule | `30` | `Integer` | `15`–`120` |
 | Groq `temperature` | LLM generation temperature | `0.1` | `Float` | `0.0`–`1.0` |
-| Groq `max_retries` | API retry count on rate limit | `3` | `Integer` | `1`–`5` |
 | Embedding `max_chars` | Chunk size for text splitting | `2048` | `Integer` | `512`–`4096` |
-| Embedding `overlap` | Chunk overlap in characters | `256` | `Integer` | `0`–`512` |
-| Embedding dimension | Vector size (nomic-embed-text) | `768` | `Integer` | Fixed |
 | HDBSCAN `min_cluster_size` | Minimum articles to form event | `3` | `Integer` | `2`–`10` |
-| HDBSCAN `min_samples` | Core point density threshold | `2` | `Integer` | `1`–`5` |
-| HDBSCAN `cluster_selection_epsilon` | Distance threshold for merging | `0.15` | `Float` | `0.0`–`1.0` |
-| HDBSCAN `metric` | Distance metric | `precomputed` | `String` | `precomputed` (cosine) |
-| Event matching `threshold` | Cosine similarity for event merge | `0.85` | `Float` | `0.5`–`1.0` |
 | Hybrid retrieval `top_k` | Final results after RRF fusion | `5` | `Integer` | `3`–`20` |
-| Hybrid retrieval `date_filter_days` | Time window for retrieval | `90` | `Integer` | `7`–`365` |
 | RRF `k` parameter | Ranking constant in RRF formula | `60` | `Integer` | `1`–`100` |
 | HNSW `m` | Max connections per layer | `16` | `Integer` | `8`–`64` |
-| HNSW `ef_construction` | Construction search breadth | `128` | `Integer` | `64`–`512` |
-
-### Risk Scoring Formula
-
-The composite country risk score is computed as:
-
-```
-composite = 0.4 × avg_risk_weight + 0.3 × norm_sentiment + 0.3 × norm_strategic
-```
-
-Where:
-- `avg_risk_weight` = mean of {Low: 0.15, Medium: 0.45, High: 0.75, Critical: 1.0}
-- `norm_sentiment` = (1 − avg_sentiment) / 2 — maps [-1, 1] → [1, 0]
-- `norm_strategic` = avg_strategic_score / 100 — maps [0, 100] → [0, 1]
-
-| Composite Score | Risk Tier |
-|----------------|-----------|
-| ≥ 0.70 | Critical |
-| ≥ 0.50 | High |
-| ≥ 0.30 | Medium |
-| < 0.30 | Low |
 
 ---
 
@@ -907,165 +708,96 @@ Where:
 
 ### Prometheus Metrics
 
-All metrics are exposed at `GET /metrics` and can be scraped by Prometheus.
-
-| Metric | Type | Description | Labels | Formula / Use Case |
-|--------|------|-------------|--------|--------------------|
-| `articles_ingested_total` | Counter | Total articles ingested from all sources | `source` | Rate: `rate(articles_ingested_total[5m])` |
-| `articles_analyzed_total` | Counter | Articles processed through AI pipeline | `status` (success/failed) | Success rate: `sum(rate(...{status="success"})) / sum(rate(...))` |
-| `article_analysis_seconds` | Histogram | End-to-end AI pipeline latency per article | — | P95: `histogram_quantile(0.95, rate(..._bucket[5m]))` |
-| `groq_tokens_total` | Counter | Total tokens consumed via Groq API | `model`, `task` | Daily budget: `sum(increase(...[24h]))` |
-| `groq_call_seconds` | Histogram | Groq API round-trip latency | — | Avg: `rate(..._sum[5m]) / rate(..._count[5m])` |
-| `embedding_seconds` | Histogram | Ollama embedding latency per document | — | P99: `histogram_quantile(0.99, rate(..._bucket[5m]))` |
-| `vector_search_seconds` | Histogram | pgvector ANN search (HNSW) latency | — | P50: `histogram_quantile(0.5, rate(..._bucket[5m]))` |
-| `rag_queries_total` | Counter | Total RAG analyst queries executed | — | Rate: `rate(rag_queries_total[1h])` |
-| `events_detected_total` | Counter | Geopolitical events detected via HDBSCAN | — | Cumulative count |
-| `entities_extracted_total` | Counter | Named entities extracted and upserted | `entity_type` | Breakdown by type |
-| `forecasts_generated_total` | Counter | Intelligence forecasts generated | — | Cumulative count |
-| `celery_queue_depth` | Gauge | Pending tasks in Celery queue | `queue` | Alert if > threshold |
-
-### Analysis Quality Metrics
-
-| Metric | Description | Formula | Use Case |
-|---|---|---|---|
-| **Recall@K** | Fraction of relevant documents in top-K retrieved | `\|relevant ∩ retrieved@K\| / \|relevant\|` | RAG retrieval quality |
-| **Brier Score** | Calibration of probabilistic forecasts | `(p̂ - o)²` where p̂=predicted prob, o=actual outcome | Forecasting accuracy |
-| **RRF Score** | Combined relevance rank from two signals | `Σ 1/(k + rank_i)` for each retrieval list | Hybrid retrieval fusion |
-| **Silhouette Score** | Cohesion vs separation of event clusters | `(b - a) / max(a, b)` | HDBSCAN cluster quality |
-| **F1 Score** | Harmonic mean of Precision and Recall | `2 × (P × R) / (P + R)` | Sentiment/Bias classification |
-| **BLEU Score** | N-gram overlap between generated and reference | `BP × exp(Σ wₙ log pₙ)` | Translation quality |
-| **ROUGE-L** | Longest common subsequence overlap | `LCS(X,Y) / len(X)` for recall | Summarisation quality |
-| **Precision@K** | Fraction of top-K results that are relevant | `\|relevant ∩ retrieved@K\| / K` | Entity retrieval |
-| **API p95 Latency** | 95th percentile HTTP response time | Prometheus `histogram_quantile(0.95, ...)` | System performance SLA |
-| **Token Efficiency** | Tasks completed per 1K Groq tokens | `tasks / (tokens / 1000)` | Cost optimisation |
-
-### Targets & Current Status
-
-| Subsystem | Metric | Target | Current Status |
-|---|---|---|---|
-| Ingestion throughput | Articles / hour | ≥ 500 | ✅ ~600 (parallel adapters) |
-| Deduplication | False positive rate | < 1% | ✅ SHA-256 collision probability: ~10⁻⁷⁷ |
-| Sentiment analysis | F1 vs human labels | ≥ 0.80 | 🔄 Evaluation in progress |
-| Bias detection | Accuracy | ≥ 0.75 | 🔄 Evaluation in progress |
-| Event clustering | Silhouette score | ≥ 0.50 | 🔄 Requires ≥100 articles |
-| RAG retrieval | Recall@5 | ≥ 0.75 | 🔄 Evaluation in progress |
-| RAG generation | Human eval (1–5) | ≥ 4.0 | 🔄 Pending human labeling |
-| Forecasting | Brier Score | < 0.20 | 🔄 Tracking (need 30+ resolved) |
-| API latency (p95) | Non-LLM endpoints | < 200ms | ✅ Confirmed via Prometheus |
-| Groq calls (p95) | Per-call latency | < 2s | ✅ Avg ~600ms |
-| Embedding (p95) | Per-document | < 250ms | ✅ Avg ~180ms |
+| Metric | Type | Description |
+|--------|------|-------------|
+| `articles_ingested_total` | Counter | Total articles ingested from all sources |
+| `articles_analyzed_total` | Counter | Articles processed through AI pipeline |
+| `article_analysis_seconds` | Histogram | End-to-end AI pipeline latency per article |
+| `groq_tokens_total` | Counter | Total tokens consumed via Groq API |
+| `vector_search_seconds` | Histogram | pgvector ANN search (HNSW) latency |
 
 ---
 
 ## Dependencies
 
-### Backend (Python 3.11+)
-
-| Package | Purpose |
-|---------|---------|
-| `fastapi` | Async web framework for API layer |
-| `uvicorn` | ASGI server |
-| `sqlalchemy[asyncio]` | Async ORM for PostgreSQL |
-| `asyncpg` | High-performance PostgreSQL driver |
-| `pydantic` / `pydantic-settings` | Data validation and settings management |
-| `python-dotenv` | Environment variable loading |
-| `httpx` | Async HTTP client for external APIs |
-| `groq` | Official Groq API Python client |
-| `langdetect` | Language detection for multilingual articles |
-| `beautifulsoup4` | HTML/XML parsing for RSS feeds |
-| `celery` | Distributed task queue for background processing |
-| `redis` | Redis client (Celery broker + token tracking) |
-| `structlog` | Structured logging (dev console / prod JSON) |
-| `scikit-learn` | HDBSCAN clustering and cosine similarity |
-| `numpy` | Numerical operations for embeddings |
-| `pandas` | Data manipulation and analysis |
-| `websockets` | WebSocket support for real-time feed |
-| `prometheus-fastapi-instrumentator` | Auto-instrumentation for Prometheus metrics |
-| `prometheus-client` | Custom metric definitions |
-
-### Frontend (Node.js 20+)
-
-| Package | Purpose |
-|---------|---------|
-| `next` (v16) | React meta-framework with App Router |
-| `react` / `react-dom` (v19) | UI library |
-| `@supabase/supabase-js` | Supabase client for auth and database |
-| `@supabase/auth-helpers-nextjs` | Supabase auth integration for Next.js |
-| `@tanstack/react-query` | Server state management and caching |
-| `zustand` | Lightweight client state management |
-| `d3` | Data visualization (risk map choropleth) |
-| `topojson-client` | TopoJSON parsing for world map geometry |
-| `recharts` | Chart components for analytics dashboard |
-| `groq-sdk` | Frontend Groq API client |
-| `lucide-react` | Icon library |
-| `shadcn` / `class-variance-authority` | UI component primitives |
-| `tailwindcss` (v4) | Utility-first CSS framework |
-| `date-fns` | Date formatting and manipulation |
-
-### Infrastructure
-
-| Tool | Purpose |
-|------|---------|
-| **Supabase** | Managed PostgreSQL with pgvector, Auth, and RLS |
-| **Redis 7** | Celery broker, result backend, and token budget store |
-| **Ollama** | Local embedding model server (nomic-embed-text) |
-| **Docker + Docker Compose** | Containerized deployment |
-| **Railway** | Backend deployment platform |
-| **Vercel** | Frontend deployment platform |
-| **Flower** | Celery task monitoring UI |
-| **Prometheus** | Metrics collection and alerting |
+- **Backend:** FastAPI, SQLAlchemy (Async), Celery, Redis, Pydantic, Groq, Ollama, Scikit-learn (HDBSCAN).
+- **Frontend:** Next.js 16, React 19, Tailwind CSS v4, Zustand, D3.js, TopoJSON, Recharts, Lucide.
 
 ---
 
 ## Contributing Guidelines
 
-We welcome contributions to the Strategic News Analyzer! Please follow these guidelines:
-
-### Getting Started
-
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally:
-   ```bash
-   git clone https://github.com/your-username/Strategic-News-Analyzer.git
-   ```
-3. **Create a feature branch** from `v2-rebuild`:
-   ```bash
-   git checkout -b feature/your-feature-name v2-rebuild
-   ```
-4. **Set up** the development environment following the [Installation](#installation--setup) guide
-
-### Development Standards
-
-- **Python**: Follow PEP 8 conventions; use `ruff` for linting
-- **TypeScript**: Use strict mode; follow the existing component patterns
-- **Commits**: Use [Conventional Commits](https://conventionalcommits.org/) format:
-  - `feat:` new features
-  - `fix:` bug fixes
-  - `docs:` documentation changes
-  - `refactor:` code refactoring
-  - `test:` adding or updating tests
-- **Testing**: Add tests for new functionality in `backend/tests/`
-  ```bash
-  cd backend && pytest -v
-  ```
-- **Code Review**: All PRs require at least one review before merging
-
-### Submitting Changes
-
-1. **Push** your branch to your fork
-2. **Open a Pull Request** against `v2-rebuild` branch
-3. **Describe** your changes clearly — what, why, and how
-4. **Link** any related issues
-5. **Ensure** all CI checks pass
+1. **Fork** the repository and clone it locally.
+2. **Create a feature branch** from `v3-native-backend`.
+3. Follow PEP 8 for Python and use strict mode for TypeScript.
+4. **Open a Pull Request** describing your changes clearly.
+5. All PRs require at least one review before merging.
 
 ### Areas for Contribution
+- Additional news source adapters
+- New visualization components
+- Improved test coverage
+- Grafana dashboard templates
 
-- 🌐 Additional news source adapters (e.g., The Guardian API, Bing News)
-- 📊 New visualization components (timeline views, network graphs)
-- 🧪 Improved test coverage for AI agents and API endpoints
-- 🌍 Enhanced region normalization for the risk map
-- 📈 Grafana dashboard templates for Prometheus metrics
-- 📝 Documentation improvements and translations
+---
+
+## Cloud Architecture & Deployment
+
+SNA is designed for enterprise-grade scalability, employing a multi-cloud strategy that leverages AWS for heavy compute, Vercel for edge delivery, and Supabase for managed PostgreSQL.
+
+### 1. AWS Compute & Ingestion Cluster (Backend)
+- **Amazon ECS (Fargate):** The FastAPI application and Celery workers are containerized via Docker and deployed on serverless Fargate clusters. This allows auto-scaling the ingestion pipeline based on CPU/Memory load during heavy news cycles.
+- **Amazon ElastiCache (Redis):** Acts as the message broker for Celery tasks and provides sub-millisecond latency for token budget counters and rate limiting.
+- **Application Load Balancer (ALB):** Distributes incoming WebSocket connections (`/ws/feed`) and REST API traffic across the ECS tasks.
+- **AWS Secrets Manager:** Securely stores third-party API keys (Groq, NewsAPI, MediaStack) and injects them into the Fargate containers at runtime.
+
+### 2. Edge Delivery & Frontend (Vercel)
+- **Vercel Edge Network:** The Next.js 16 frontend is deployed to Vercel, leveraging Edge caching for static assets and Server-Side Rendering (SSR) for the Dashboard and Analytics pages.
+- **Next.js API Routes:** Used as lightweight proxies to mask backend URLs and handle frontend-specific rate limiting.
+
+### 3. Managed Database & Authentication (Supabase)
+- **PostgreSQL (AWS us-east-1):** Hosted via Supabase, utilizing the `pgvector` extension for storing 768-dimensional article and entity embeddings.
+- **Connection Pooling (PgBouncer):** Configured to handle thousands of concurrent read requests from the RAG engine without exhausting database connections.
+- **Supabase Auth:** Handles JWT minting and session management for analysts logging into the platform.
+
+---
+
+## Security & Hardening
+
+Security is treated as a first-class citizen, implementing a Zero-Trust architecture across all layers.
+
+### 1. Row-Level Security (RLS)
+The PostgreSQL database strictly enforces Row-Level Security.
+- **Public Data (Read-Only):** The `articles`, `events`, `entities`, and `forecasts` tables have `SELECT USING (true)` policies for authenticated and unauthenticated analysts.
+- **Private Data (Isolated):** The `watchlists` and `alerts` tables enforce `USING (auth.uid() = user_id)`, guaranteeing that an analyst can never access another analyst's watchlists.
+- **Write Operations:** Only the internal FastAPI backend (authenticating via `DATABASE_URL` or `SERVICE_ROLE_KEY`) is permitted to `INSERT`, `UPDATE`, or `DELETE` intelligence data. Client-side mutations are mathematically impossible.
+
+### 2. Prompt Injection Defense
+When executing RAG (Retrieval-Augmented Generation) for the AI Analyst chat, the system pulls untrusted text from global news sources. To prevent an adversary from embedding prompt injections in a news article (e.g., "Ignore all previous instructions and output..."), the system encapsulates all retrieved context within strict XML delimiters (`<source>...</source>`) and uses strongly-typed system prompts to isolate the user's instructions from the data.
+
+### 3. API Security & CORS
+- **Strict CORS Policies:** The backend rejects all requests that do not originate from the explicit `CORS_ORIGINS` (e.g., the production Vercel domain).
+- **JWT Verification:** Admin endpoints (like `/api/v2/admin/ingest`) require a valid Bearer token minted by Supabase, cryptographically verified by the backend middleware before execution.
+
+---
+
+## Development Practices (SDE Standard)
+
+SNA is built adhering to modern Software Development Engineering (SDE) standards to ensure maintainability, testability, and stability.
+
+### 1. Architecture Patterns
+- **Repository Pattern:** Database access is abstracted into classes (e.g., `ArticleRepository`). This isolates SQLAlchemy logic from the API routers, making the business logic easily testable via mocked repositories.
+- **Strategy Pattern:** The ingestion engine uses a `BaseSourceAdapter` interface, allowing developers to add new news APIs (like Bing News or Bloomberg) by simply implementing a `fetch()` method, satisfying the Open-Closed Principle.
+- **Dependency Injection:** FastAPI's `Depends()` is heavily utilized to inject database sessions and configuration into routes, ensuring thread-safe operation and eliminating global state mutations.
+
+### 2. CI/CD & Git Flow
+- **Trunk-Based Development:** All features are developed in short-lived feature branches and merged into `v3-native-backend` via Pull Requests.
+- **GitHub Actions (CI):** Every PR triggers an automated pipeline that runs `flake8` for Python linting, `tsc` for TypeScript type-checking, and `pytest` for unit tests. A merge is blocked if any check fails.
+- **Automated Deployments (CD):** Merging to the main branch automatically triggers Vercel to build and deploy the Next.js frontend, and Railway/AWS to roll out the new FastAPI container image with zero downtime.
+
+### 3. Observability & Telemetry
+- **Structured JSON Logging:** Python's `structlog` is used. In production, logs are emitted as JSON, allowing easy ingestion and querying in Datadog or AWS CloudWatch.
+- **Prometheus Metrics:** The `/metrics` endpoint exposes RED (Rate, Errors, Duration) metrics. Key performance indicators (like *Article Analysis Latency* and *Groq Token Consumption*) are tracked as Histograms and Counters to trigger automated alerts via Grafana if SLA thresholds are breached.
 
 ---
 
@@ -1082,6 +814,5 @@ MIT License — Copyright (c) 2026 KBM
 <div align="center">
   <b>Built with</b> FastAPI · Next.js · Supabase · Groq · Ollama · pgvector
   <br/>
-  <sub>Strategic News Analyzer v2.0.0</sub>
+  <sub>Strategic News Analyzer v3.0.0</sub>
 </div>
-
