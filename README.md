@@ -1564,40 +1564,42 @@ SNA is designed for enterprise-grade scalability, employing a **multi-cloud stra
          ┌──────────▼──────────┐    ┌──────────▼──────────┐
          │      VERCEL         │    │   AWS (ap-south-1)  │
          │  (Frontend CDN)     │    │                     │
-         │                     │    │  Application Load   │
-         │  Next.js 16         │    │  Balancer (ALB)     │
-         │  Edge Functions     │    └──────────┬──────────┘
-         │  Static Assets      │               │
-         │  SSR Pages          │    ┌──────────▼──────────┐
-         └──────────┬──────────┘    │  AWS ECS Fargate    │
+         │                     │    │  AWS EC2 Instance   │
+         │  Next.js 16         │    │  (strategic-news.   │
+         │  Edge Functions     │    │   duckdns.org)      │
+         │  Static Assets      │    └──────────┬──────────┘
+         │  SSR Pages          │               │
+         └──────────┬──────────┘    ┌──────────▼──────────┐
+                    │               │  Nginx Reverse Proxy│
+                    │               │  (SSL Termination)  │
+                    │               └──────────┬──────────┘
+                    │                          │
+                    │               ┌──────────▼──────────┐
+                    │               │  Docker Compose     │
                     │               │                     │
                     │               │  FastAPI Container  │
-                    │               │  (Auto-scaling)     │
-                    │               │                     │
                     │               │  Celery Worker      │
-                    │               │  Containers (×N)    │
-                    └──────────────►│                     │
-                                    │  Celery Beat        │
-                                    │  Container          │
+                    │               │  Celery Beat        │
+                    └──────────────►│  Redis Container    │
                                     └──────────┬──────────┘
                                                │
                        ┌───────────────────────┼───────────────────────┐
                        │                       │                       │
             ┌──────────▼──────────┐ ┌──────────▼──────────┐ ┌────────▼────────┐
-            │    AWS              │ │    Supabase          │ │   AWS           │
-            │ ElastiCache Redis   │ │  PostgreSQL 15       │ │ Secrets Manager │
-            │ (Celery broker +    │ │  + pgvector          │ │ (API keys,      │
-            │  token budgets)     │ │  + RLS + Auth        │ │  credentials)   │
+            │    Groq API         │ │    Supabase          │ │   Ollama API    │
+            │  (Llama 3 Models)   │ │  PostgreSQL 15       │ │ (Embeddings)    │
+            │                     │ │  + pgvector          │ │                 │
+            │                     │ │  + RLS + Auth        │ │                 │
             └─────────────────────┘ └──────────────────────┘ └─────────────────┘
 ```
 
 ### 1. AWS Compute & Ingestion Cluster (Backend)
 
-- **Amazon ECS (Fargate):** The FastAPI application, Celery workers, and Celery Beat scheduler are all containerized via Docker and deployed on serverless Fargate clusters. This provides automatic scaling based on CPU/Memory load during heavy ingestion cycles (e.g., breaking global events).
-- **Application Load Balancer (ALB):** Distributes incoming HTTPS REST requests and WSS WebSocket connections (`/ws/feed`) across all running FastAPI ECS tasks. The ALB is configured with sticky sessions for WebSocket connections.
-- **Amazon ElastiCache (Redis):** Managed Redis 7 cluster acting as the Celery message broker and result backend. Also stores the daily Groq token budget counter with sub-millisecond latency.
-- **AWS Secrets Manager:** Securely stores all third-party API keys (Groq, NewsAPI, MediaStack, Supabase credentials) and injects them as environment variables into Fargate containers at runtime. No secrets are ever stored in container images or version control.
-- **DuckDNS + AWS EC2 (Current Setup):** For the current deployment, a persistent EC2 instance runs the backend stack behind a DuckDNS dynamic DNS record (`strategic-news.duckdns.org`), with Nginx as a reverse proxy handling SSL termination.
+- **Amazon EC2:** The entire backend stack (FastAPI, Celery workers, Celery Beat scheduler, and Redis) is deployed on a persistent AWS EC2 instance. This single-node architecture keeps infrastructure costs low while providing enough compute for heavy data ingestion and asynchronous task processing.
+- **Docker Compose:** Container orchestration is handled via Docker Compose, enabling easy teardowns, localized environment parity, and simple deployment rollouts.
+- **Nginx Reverse Proxy:** Traffic routes through Nginx for SSL termination, enabling secure HTTPS and WSS (Secure WebSockets) for the real-time `/ws/feed` connection.
+- **DuckDNS:** A dynamic DNS record (`strategic-news.duckdns.org`) points to the EC2 instance's Elastic IP, providing a stable endpoint for the Vercel frontend to query.
+- **Redis (Containerized):** A Redis container runs on the EC2 instance acting as the Celery message broker, result backend, and maintaining the daily Groq API token budget.
 
 ### 2. Edge Delivery & Frontend (Vercel)
 
