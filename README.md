@@ -695,7 +695,7 @@ erDiagram
     }
 
     entity_embeddings {
-        UUID entity_id PK_FK
+        UUID entity_id PK, FK
         VECTOR embedding
         TIMESTAMPTZ updated_at
     }
